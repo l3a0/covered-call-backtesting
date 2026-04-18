@@ -330,17 +330,17 @@ class TestRunCcOverlay:
         """wins + losses = number of closed/expired trades."""
         dates, prices = rising_market
         summary, trades, _ = run_cc_overlay(dates, prices, default_params)
-        closed = sum(1 for t in trades if t['action'] in ('close', 'expiration'))
+        closed = sum(1 for t in trades if t['action'] in ('close', 'close_itm', 'expiration'))
         assert summary['wins'] + summary['losses'] == closed
 
     def test_daily_equity_length(self, rising_market: tuple[list[str], np.ndarray[Any, np.dtype[np.float64]]], default_params: dict[str, float]) -> None:  # pyright: ignore[reportUnknownParameterType]
         """Daily equity has one entry per day after warmup."""
         dates, prices = rising_market
         _, _, daily_equity = run_cc_overlay(dates, prices, default_params)
-        # Days 0-1 skipped: day 0 has 0 returns; day 1 has only 1 return,
-        # which is too few for np.std(ddof=1) (needs ≥2 samples → else NaN).
-        # Day 2 has 2 returns, which is the minimum for a valid std.
-        assert len(daily_equity) == len(dates) - 2
+        # All days produce a daily_equity entry: the warmup uses a 0.20
+        # vol fallback for day_idx < 3, so no days are skipped.
+        # (Days where net_premium <= 0 would skip, but rising market has vol > 0.)
+        assert len(daily_equity) == len(dates)
 
     def test_initial_cost_matches_first_price(self, rising_market: tuple[list[str], np.ndarray[Any, np.dtype[np.float64]]], default_params: dict[str, float]) -> None:  # pyright: ignore[reportUnknownParameterType]
         """Initial cost should be first price × 100."""
@@ -379,7 +379,7 @@ class TestRunCcOverlay:
         """All trade actions should be one of the expected values."""
         dates, prices = rising_market
         _, trades, _ = run_cc_overlay(dates, prices, default_params)
-        valid_actions = {'sell', 'close', 'expiration'}
+        valid_actions = {'sell', 'close', 'close_itm', 'expiration'}
         for trade in trades:
             assert trade['action'] in valid_actions
 
@@ -466,7 +466,7 @@ class TestScenarioCalledAway:
 
         sell = trades[0]
         # First non-sell trade after the sell
-        outcome = next(t for t in trades[1:] if t['action'] in ('expiration', 'close'))
+        outcome = next(t for t in trades[1:] if t['action'] in ('expiration', 'close', 'close_itm'))
 
         if outcome['action'] == 'expiration':
             # Called away: pnl = (premium - (price - strike)) * 100
@@ -517,7 +517,7 @@ class TestScenarioMultipleCycles:
         summary, trades, _ = run_cc_overlay(dates, prices, params)
 
         sells = [t for t in trades if t['action'] == 'sell']
-        closes_or_expirations = [t for t in trades if t['action'] in ('close', 'expiration')]
+        closes_or_expirations = [t for t in trades if t['action'] in ('close', 'close_itm', 'expiration')]
 
         # Should have at least 3 cycles in 100 days with 21 DTE
         assert len(sells) >= 3
@@ -543,9 +543,9 @@ class TestScenarioPnlAccumulation:
         _, trades, _ = run_cc_overlay(dates, prices, params)
 
         # Sum pnls from trades that close a position (sell trades have pnl=0)
-        total_pnl = sum(t['pnl'] for t in trades if t['action'] in ('close', 'expiration'))
+        total_pnl = sum(t['pnl'] for t in trades if t['action'] in ('close', 'close_itm', 'expiration'))
         # The last trade with realized_pnl should match this sum
-        last_with_realized = [t for t in trades if t['action'] in ('close', 'expiration')][-1]
+        last_with_realized = [t for t in trades if t['action'] in ('close', 'close_itm', 'expiration')][-1]
         assert last_with_realized['realized_pnl'] == pytest.approx(total_pnl, abs=1e-6)
 
 
@@ -568,7 +568,7 @@ class TestScenarioEquityFinalState:
         final_stock_value = final_price * 100
 
         # Cumulative overlay P&L from closed trades
-        realized = sum(t['pnl'] for t in trades if t['action'] in ('close', 'expiration'))
+        realized = sum(t['pnl'] for t in trades if t['action'] in ('close', 'close_itm', 'expiration'))
 
         # Final equity = stock value + realized overlay P&L (no open position assumed)
         # Allow for unrealized P&L on any still-open position
