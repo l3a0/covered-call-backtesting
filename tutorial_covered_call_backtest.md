@@ -25,6 +25,7 @@
 
 Before diving in, here are a few terms you'll see throughout this tutorial:
 
+- **Assignment loss:** What happens when your covered call gets exercised because the stock rallied past the strike. You collected premium up front, but to keep running the overlay you must rebuy the shares at the current (higher) market price. The overlay's net is `premium − (market_price − strike)`. It's a **loss** when the stock rallied past `strike + premium`. Example: you sold a $310 strike call for $1.50 premium and the stock closed at $325 — you keep the $1.50 but pay back $15 of capped upside, netting **−$13.50/share**. The stock appreciation up to the strike is still yours (tracked separately as part of equity), but the *uncapped* portion of the rally is gone. In a strong bull market this is the dominant cost the overlay pays.
 - **CC (Covered Call):** A strategy where you own 100 shares of a stock and sell a call option against them. You collect the premium up front; if the stock stays below the strike at expiration, you keep the shares and the premium. If it rises above the strike, your shares may be called away at that price. "Covered" means you already own the shares, so you're not exposed to unlimited upside risk like a naked call.
 - **CSP (Cash-Secured Put):** A strategy where you sell a put option and set aside enough cash to buy 100 shares at the strike price if assigned. You collect the premium up front; if the stock stays above the strike, the put expires worthless and you keep the cash. If it falls below, you're obligated to buy the shares at the strike. CSPs are the "entry" half of the wheel — a way to get paid while waiting to buy a stock at a discount.
 - **CDF (Cumulative Distribution Function):** Answers the question "what's the probability a value falls at or below X?" Imagine filling a glass of water as you move left to right across a bell curve — at the far left it's nearly empty (0%), at the center it's half full (50%), at the far right it's nearly full (100%). In our context, the CDF converts a stock's distance from the strike price into a probability, which is exactly what Black-Scholes needs to price an option.
@@ -943,6 +944,9 @@ def run_cc_overlay(dates, prices, params):
             - close_at_pct: close when this % of premium captured (e.g., 0.75)
             - dte: days to expiration when opening position (e.g., 21)
             - risk_free_rate: annual risk-free rate (e.g., 0.045)
+            - capital: total dollars committed to the portfolio (default:
+              cost of 1 contract). Sized into whole 100-share contracts;
+              remainder sits as 0%-yield cash.
         
         IV estimation uses the regime-based detect_regime() + estimate_iv()
         functions (multiplier varies: 1.1× in high vol, 1.3× normal, 1.5× low).
@@ -960,14 +964,29 @@ def run_cc_overlay(dates, prices, params):
     # detect_regime() + estimate_iv() functions handle the HV→IV
     # adjustment dynamically based on current volatility level.
 
-    
+    initial_price = prices[0]
+    contract_cost = initial_price * 100  # cost of one 100-share contract
+
+    # Size the portfolio. Default: single contract (the original behavior).
+    # Pass capital=100000 to test a $100K portfolio — the engine sizes it
+    # into whole contracts (uninvested remainder sits as 0%-yield cash).
+    capital = float(params.get('capital', contract_cost))
+    num_contracts = int(capital // contract_cost)
+    if num_contracts < 1:
+        raise ValueError(
+            f"Capital ${capital:,.2f} insufficient for 1 contract "
+            f"at ${initial_price:.2f}/share (need ${contract_cost:,.2f})"
+        )
+    shares = 100 * num_contracts                   # total shares held
+    initial_stock_cost = shares * initial_price    # actual capital deployed in stock
+    cash = capital - initial_stock_cost            # leftover, 0% yield
+
     num_days = len(dates)
     trades = []
     daily_equity = []
     
     # State tracking
     position = None  # None or {'strike', 'premium_collected', 'entry_price', 'entry_idx', 'entry_date'}
-    initial_price = prices[0]
     realized_pnl = 0.0  # cumulative premium overlay P&L (excludes stock appreciation)
     num_calls_sold = 0
     total_premium_collected = 0
@@ -1075,7 +1094,7 @@ def run_cc_overlay(dates, prices, params):
                 'entry_date': date,
             }
             num_calls_sold += 1
-            total_premium_collected += net_premium * 100
+            total_premium_collected += net_premium * shares
             
             trades.append({
                 'date': date,
@@ -1108,14 +1127,35 @@ def run_cc_overlay(dates, prices, params):
             days_left = dte - (day_idx - position['entry_idx'])
             
             if days_left <= 0:
-                # Expiration reached.
-                # Overlay P&L only — stock appreciation is tracked separately.
+                # Expiration reached. Overlay P&L only — stock appreciation
+                # is tracked separately by the daily equity calculation below.
                 if price >= position['strike']:
-                    # Called away: keep premium, but pay to rebuy shares above strike
-                    pnl = (position['premium_collected'] - (price - position['strike'])) * 100
+                    # Called away (assignment): the buyer exercises the call
+                    # and takes our shares at the strike. To stay in the
+                    # overlay business (always own 100 shares), we immediately
+                    # rebuy at the current market price.
+                    #
+                    # Cash flow per share: collect strike, pay current price.
+                    # Net to overlay: premium_collected - (price - strike).
+                    #
+                    # Example (per share):
+                    #   strike = $310, premium = $1.50, market = $325
+                    #   pnl = $1.50 - ($325 - $310) = -$13.50  → assignment loss
+                    # Or if the stock barely closed ITM:
+                    #   strike = $310, premium = $1.50, market = $311
+                    #   pnl = $1.50 - $1.00 = +$0.50  → small win
+                    #
+                    # An assignment is a LOSS for the overlay when the stock
+                    # rallied past `strike + premium` — you collected premium
+                    # but had to pay back the upside above strike. The stock
+                    # appreciation up to `strike` is still kept (it's in the
+                    # daily equity tracking), so you don't lose money overall;
+                    # you just lose the *uncapped* portion of the rally.
+                    pnl = (position['premium_collected'] - (price - position['strike'])) * shares
                 else:
-                    # Expired OTM: keep full premium
-                    pnl = position['premium_collected'] * 100
+                    # Expired OTM: stock closed below strike, call is worthless,
+                    # we keep the full premium and the shares.
+                    pnl = position['premium_collected'] * shares
                 
                 realized_pnl += pnl
                 if pnl >= 0:
@@ -1141,7 +1181,7 @@ def run_cc_overlay(dates, prices, params):
                 # Close if profit target reached (close_at_pct of premium captured)
                 if call_value_today <= position['premium_collected'] * (1 - close_at_pct):
                     # Buy back the call
-                    pnl = (position['premium_collected'] - call_value_today) * 100 - 0.65
+                    pnl = (position['premium_collected'] - call_value_today) * shares - 0.65 * num_contracts
                     realized_pnl += pnl
                     if pnl >= 0:
                         wins += 1
@@ -1167,7 +1207,7 @@ def run_cc_overlay(dates, prices, params):
                     # diagram and the run_cc_overlay_day() function above.
                     delta_today = bs_delta(price, position['strike'], T_remaining, r, iv_estimate, option_type='call')
                     if delta_today > 0.70:
-                        pnl = (position['premium_collected'] - call_value_today) * 100 - 0.65
+                        pnl = (position['premium_collected'] - call_value_today) * shares - 0.65 * num_contracts
                         realized_pnl += pnl
                         if pnl >= 0:
                             wins += 1
@@ -1186,26 +1226,43 @@ def run_cc_overlay(dates, prices, params):
                 # Otherwise: hold — nothing to do today. The daily equity
                 # tracking below will reflect the current unrealized P&L.
         
-        # Track daily equity: stock value (100 shares) + cumulative overlay P&L.
-        # This measures the total value of the covered call position: what the
-        # shares are worth today plus all net premium income earned so far.
-        # Return is measured against initial stock cost, not the capital param.
-        stock_value = price * 100
-        equity = stock_value + realized_pnl
+        # Track daily equity: stock value + idle cash + cumulative overlay P&L.
+        # This is the total portfolio value today (mark-to-market on shares,
+        # plus the leftover cash, plus all net premium income realized so far).
+        # Returns are measured against `capital` (the total committed dollars).
+        stock_value = price * shares
+        equity = stock_value + cash + realized_pnl
         if position is not None:
             days_left = dte - (day_idx - position['entry_idx'])
             T_remaining = max(days_left / 252, 0)
             call_value = bs_price(price, position['strike'], T_remaining, r, iv_estimate, option_type='call')
-            equity += (position['premium_collected'] - call_value) * 100
+            equity += (position['premium_collected'] - call_value) * shares
         daily_equity.append({'date': date, 'equity': round(equity, 2), 'price': price})
     
     # Compute summary stats
-    initial_cost = initial_price * 100  # cost basis of 100 shares
-    final_equity = daily_equity[-1]['equity'] if daily_equity else initial_cost
-    total_return = (final_equity - initial_cost) / initial_cost * 100
-    
+    final_equity = daily_equity[-1]['equity'] if daily_equity else capital
+    total_return = (final_equity - capital) / capital * 100
+
+    # Buy-and-hold benchmark: hold the same `shares` for the whole period
+    # without selling calls. Idle cash sits at 0% in both scenarios so it
+    # cancels in the excess-return comparison.
+    final_price = prices[-1]
+    buy_hold_final = final_price * shares + cash
+    buy_hold_return = (buy_hold_final - capital) / capital * 100
+    excess_return = total_return - buy_hold_return
+
+    # Decompose the overlay's contribution: we collected `total_premium_collected`
+    # in gross premium across all sells, but had to pay it back via buybacks
+    # (early closes at profit target / ITM) and assignment losses (when called
+    # away above strike). The net overlay P&L equals the gap between final
+    # equity and the buy-and-hold final value.
+    net_overlay_pnl = final_equity - buy_hold_final
+    overlay_costs = total_premium_collected - net_overlay_pnl
+    premium_retention = (net_overlay_pnl / total_premium_collected * 100
+                        if total_premium_collected > 0 else 0.0)
+
     # Max drawdown
-    peak = initial_cost
+    peak = capital
     max_dd = 0
     for d in daily_equity:
         if d['equity'] > peak:
@@ -1215,10 +1272,19 @@ def run_cc_overlay(dates, prices, params):
             max_dd = dd
     
     summary = {
-        'initial_cost': round(initial_cost, 2),
+        'capital': round(capital, 2),
+        'num_contracts': num_contracts,
+        'initial_stock_cost': round(initial_stock_cost, 2),
+        'cash': round(cash, 2),
         'final_equity': round(final_equity, 2),
         'total_return_pct': round(total_return, 2),
+        'buy_hold_final': round(buy_hold_final, 2),
+        'buy_hold_return_pct': round(buy_hold_return, 2),
+        'excess_return_pct': round(excess_return, 2),
+        'net_overlay_pnl': round(net_overlay_pnl, 2),
         'total_premium_collected': round(total_premium_collected, 2),
+        'overlay_costs': round(overlay_costs, 2),
+        'premium_retention_pct': round(premium_retention, 1),
         'num_calls_sold': num_calls_sold,
         'wins': wins,
         'losses': losses,
@@ -2313,6 +2379,9 @@ def run_cc_overlay(dates, prices, params):
             - close_at_pct: close when this % of premium captured (e.g., 0.75)
             - dte: days to expiration when opening position (e.g., 21)
             - risk_free_rate: annual risk-free rate (e.g., 0.045)
+            - capital: total dollars committed to the portfolio (default:
+              cost of 1 contract). Sized into whole 100-share contracts;
+              remainder sits as 0%-yield cash.
         
         IV estimation uses the regime-based detect_regime() + estimate_iv()
         functions (multiplier varies: 1.1× in high vol, 1.3× normal, 1.5× low).
@@ -2330,14 +2399,29 @@ def run_cc_overlay(dates, prices, params):
     # detect_regime() + estimate_iv() functions handle the HV→IV
     # adjustment dynamically based on current volatility level.
 
-    
+    initial_price = prices[0]
+    contract_cost = initial_price * 100  # cost of one 100-share contract
+
+    # Size the portfolio. Default: single contract (the original behavior).
+    # Pass capital=100000 to test a $100K portfolio — the engine sizes it
+    # into whole contracts (uninvested remainder sits as 0%-yield cash).
+    capital = float(params.get('capital', contract_cost))
+    num_contracts = int(capital // contract_cost)
+    if num_contracts < 1:
+        raise ValueError(
+            f"Capital ${capital:,.2f} insufficient for 1 contract "
+            f"at ${initial_price:.2f}/share (need ${contract_cost:,.2f})"
+        )
+    shares = 100 * num_contracts                   # total shares held
+    initial_stock_cost = shares * initial_price    # actual capital deployed in stock
+    cash = capital - initial_stock_cost            # leftover, 0% yield
+
     num_days = len(dates)
     trades = []
     daily_equity = []
     
     # State tracking
     position = None  # None or {'strike', 'premium_collected', 'entry_price', 'entry_idx', 'entry_date'}
-    initial_price = prices[0]
     realized_pnl = 0.0  # cumulative premium overlay P&L (excludes stock appreciation)
     num_calls_sold = 0
     total_premium_collected = 0
@@ -2445,7 +2529,7 @@ def run_cc_overlay(dates, prices, params):
                 'entry_date': date,
             }
             num_calls_sold += 1
-            total_premium_collected += net_premium * 100
+            total_premium_collected += net_premium * shares
             
             trades.append({
                 'date': date,
@@ -2478,14 +2562,35 @@ def run_cc_overlay(dates, prices, params):
             days_left = dte - (day_idx - position['entry_idx'])
             
             if days_left <= 0:
-                # Expiration reached.
-                # Overlay P&L only — stock appreciation is tracked separately.
+                # Expiration reached. Overlay P&L only — stock appreciation
+                # is tracked separately by the daily equity calculation below.
                 if price >= position['strike']:
-                    # Called away: keep premium, but pay to rebuy shares above strike
-                    pnl = (position['premium_collected'] - (price - position['strike'])) * 100
+                    # Called away (assignment): the buyer exercises the call
+                    # and takes our shares at the strike. To stay in the
+                    # overlay business (always own 100 shares), we immediately
+                    # rebuy at the current market price.
+                    #
+                    # Cash flow per share: collect strike, pay current price.
+                    # Net to overlay: premium_collected - (price - strike).
+                    #
+                    # Example (per share):
+                    #   strike = $310, premium = $1.50, market = $325
+                    #   pnl = $1.50 - ($325 - $310) = -$13.50  → assignment loss
+                    # Or if the stock barely closed ITM:
+                    #   strike = $310, premium = $1.50, market = $311
+                    #   pnl = $1.50 - $1.00 = +$0.50  → small win
+                    #
+                    # An assignment is a LOSS for the overlay when the stock
+                    # rallied past `strike + premium` — you collected premium
+                    # but had to pay back the upside above strike. The stock
+                    # appreciation up to `strike` is still kept (it's in the
+                    # daily equity tracking), so you don't lose money overall;
+                    # you just lose the *uncapped* portion of the rally.
+                    pnl = (position['premium_collected'] - (price - position['strike'])) * shares
                 else:
-                    # Expired OTM: keep full premium
-                    pnl = position['premium_collected'] * 100
+                    # Expired OTM: stock closed below strike, call is worthless,
+                    # we keep the full premium and the shares.
+                    pnl = position['premium_collected'] * shares
                 
                 realized_pnl += pnl
                 if pnl >= 0:
@@ -2511,7 +2616,7 @@ def run_cc_overlay(dates, prices, params):
                 # Close if profit target reached (close_at_pct of premium captured)
                 if call_value_today <= position['premium_collected'] * (1 - close_at_pct):
                     # Buy back the call
-                    pnl = (position['premium_collected'] - call_value_today) * 100 - 0.65
+                    pnl = (position['premium_collected'] - call_value_today) * shares - 0.65 * num_contracts
                     realized_pnl += pnl
                     if pnl >= 0:
                         wins += 1
@@ -2537,7 +2642,7 @@ def run_cc_overlay(dates, prices, params):
                     # diagram and the run_cc_overlay_day() function above.
                     delta_today = bs_delta(price, position['strike'], T_remaining, r, iv_estimate, option_type='call')
                     if delta_today > 0.70:
-                        pnl = (position['premium_collected'] - call_value_today) * 100 - 0.65
+                        pnl = (position['premium_collected'] - call_value_today) * shares - 0.65 * num_contracts
                         realized_pnl += pnl
                         if pnl >= 0:
                             wins += 1
@@ -2556,26 +2661,43 @@ def run_cc_overlay(dates, prices, params):
                 # Otherwise: hold — nothing to do today. The daily equity
                 # tracking below will reflect the current unrealized P&L.
         
-        # Track daily equity: stock value (100 shares) + cumulative overlay P&L.
-        # This measures the total value of the covered call position: what the
-        # shares are worth today plus all net premium income earned so far.
-        # Return is measured against initial stock cost, not the capital param.
-        stock_value = price * 100
-        equity = stock_value + realized_pnl
+        # Track daily equity: stock value + idle cash + cumulative overlay P&L.
+        # This is the total portfolio value today (mark-to-market on shares,
+        # plus the leftover cash, plus all net premium income realized so far).
+        # Returns are measured against `capital` (the total committed dollars).
+        stock_value = price * shares
+        equity = stock_value + cash + realized_pnl
         if position is not None:
             days_left = dte - (day_idx - position['entry_idx'])
             T_remaining = max(days_left / 252, 0)
             call_value = bs_price(price, position['strike'], T_remaining, r, iv_estimate, option_type='call')
-            equity += (position['premium_collected'] - call_value) * 100
+            equity += (position['premium_collected'] - call_value) * shares
         daily_equity.append({'date': date, 'equity': round(equity, 2), 'price': price})
     
     # Compute summary stats
-    initial_cost = initial_price * 100  # cost basis of 100 shares
-    final_equity = daily_equity[-1]['equity'] if daily_equity else initial_cost
-    total_return = (final_equity - initial_cost) / initial_cost * 100
-    
+    final_equity = daily_equity[-1]['equity'] if daily_equity else capital
+    total_return = (final_equity - capital) / capital * 100
+
+    # Buy-and-hold benchmark: hold the same `shares` for the whole period
+    # without selling calls. Idle cash sits at 0% in both scenarios so it
+    # cancels in the excess-return comparison.
+    final_price = prices[-1]
+    buy_hold_final = final_price * shares + cash
+    buy_hold_return = (buy_hold_final - capital) / capital * 100
+    excess_return = total_return - buy_hold_return
+
+    # Decompose the overlay's contribution: we collected `total_premium_collected`
+    # in gross premium across all sells, but had to pay it back via buybacks
+    # (early closes at profit target / ITM) and assignment losses (when called
+    # away above strike). The net overlay P&L equals the gap between final
+    # equity and the buy-and-hold final value.
+    net_overlay_pnl = final_equity - buy_hold_final
+    overlay_costs = total_premium_collected - net_overlay_pnl
+    premium_retention = (net_overlay_pnl / total_premium_collected * 100
+                        if total_premium_collected > 0 else 0.0)
+
     # Max drawdown
-    peak = initial_cost
+    peak = capital
     max_dd = 0
     for d in daily_equity:
         if d['equity'] > peak:
@@ -2585,10 +2707,19 @@ def run_cc_overlay(dates, prices, params):
             max_dd = dd
     
     summary = {
-        'initial_cost': round(initial_cost, 2),
+        'capital': round(capital, 2),
+        'num_contracts': num_contracts,
+        'initial_stock_cost': round(initial_stock_cost, 2),
+        'cash': round(cash, 2),
         'final_equity': round(final_equity, 2),
         'total_return_pct': round(total_return, 2),
+        'buy_hold_final': round(buy_hold_final, 2),
+        'buy_hold_return_pct': round(buy_hold_return, 2),
+        'excess_return_pct': round(excess_return, 2),
+        'net_overlay_pnl': round(net_overlay_pnl, 2),
         'total_premium_collected': round(total_premium_collected, 2),
+        'overlay_costs': round(overlay_costs, 2),
+        'premium_retention_pct': round(premium_retention, 1),
         'num_calls_sold': num_calls_sold,
         'wins': wins,
         'losses': losses,
@@ -2616,18 +2747,30 @@ if __name__ == '__main__':
         'close_at_pct': 0.75,
         'dte': 21,
         'risk_free_rate': 0.045,
+        'capital': 100_000,  # $100K portfolio (sized into whole contracts)
         # IV multiplier is now regime-based (detect_regime + estimate_iv)
     }
     
     summary, trades, daily_equity = run_cc_overlay(dates, prices, params)
     
-    print(f"Initial Cost (100 shares): ${summary['initial_cost']:,.2f}")
-    print(f"Final Equity: ${summary['final_equity']:,.2f}")
-    print(f"Total Return: {summary['total_return_pct']:.2f}%")
-    print(f"Total Premium Collected: ${summary['total_premium_collected']:,.2f}")
-    print(f"Calls Sold: {summary['num_calls_sold']}")
-    print(f"Win Rate: {summary['win_rate']:.1f}%")
-    print(f"Max Drawdown: {summary['max_drawdown_pct']:.2f}%")
+    print(f"Capital:                         ${summary['capital']:>12,.2f}")
+    print(f"Contracts (100 shares each):     {summary['num_contracts']:>12}    "
+          f"(${summary['initial_stock_cost']:,.2f} stock + ${summary['cash']:,.2f} cash)")
+    print()
+    print("Returns")
+    print(f"    Buy & Hold Final:            ${summary['buy_hold_final']:>12,.2f}    {summary['buy_hold_return_pct']:>+8.2f}%")
+    print(f"  + Net Overlay P&L:             ${summary['net_overlay_pnl']:>12,.2f}    {summary['excess_return_pct']:>+8.2f} pp")
+    print(f"  = CC Overlay Final:            ${summary['final_equity']:>12,.2f}    {summary['total_return_pct']:>+8.2f}%")
+    print()
+    print("Overlay P&L Breakdown")
+    print(f"    Gross Premium Collected:     ${summary['total_premium_collected']:>12,.2f}    (income from {summary['num_calls_sold']} calls sold)")
+    print(f"  - Buybacks + Assignment Costs: ${summary['overlay_costs']:>12,.2f}    (paid to close ITM calls + capped upside on assignment)")
+    print(f"  = Net Overlay P&L:             ${summary['net_overlay_pnl']:>12,.2f}    ({summary['premium_retention_pct']:.1f}% retained)")
+    print()
+    print("Activity")
+    print(f"    Calls Sold:                   {summary['num_calls_sold']:>12}")
+    print(f"    Win Rate:                     {summary['win_rate']:>12.1f}%")
+    print(f"    Max Drawdown:                 {summary['max_drawdown_pct']:>12.2f}%")
 ```
 
 **To run this:**

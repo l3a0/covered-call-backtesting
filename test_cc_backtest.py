@@ -308,9 +308,12 @@ class TestRunCcOverlay:
         dates, prices = rising_market
         summary, _, _ = run_cc_overlay(dates, prices, default_params)
         expected_keys = {
-            'initial_cost', 'final_equity', 'total_return_pct',
-            'total_premium_collected', 'num_calls_sold',
-            'wins', 'losses', 'win_rate', 'max_drawdown_pct',
+            'capital', 'num_contracts', 'initial_stock_cost', 'cash',
+            'final_equity', 'total_return_pct',
+            'buy_hold_final', 'buy_hold_return_pct', 'excess_return_pct',
+            'net_overlay_pnl', 'total_premium_collected', 'overlay_costs',
+            'premium_retention_pct',
+            'num_calls_sold', 'wins', 'losses', 'win_rate', 'max_drawdown_pct',
         }
         assert set(summary.keys()) == expected_keys
 
@@ -342,11 +345,13 @@ class TestRunCcOverlay:
         # (Days where net_premium <= 0 would skip, but rising market has vol > 0.)
         assert len(daily_equity) == len(dates)
 
-    def test_initial_cost_matches_first_price(self, rising_market: tuple[list[str], np.ndarray[Any, np.dtype[np.float64]]], default_params: dict[str, float]) -> None:  # pyright: ignore[reportUnknownParameterType]
-        """Initial cost should be first price × 100."""
+    def test_default_is_single_contract(self, rising_market: tuple[list[str], np.ndarray[Any, np.dtype[np.float64]]], default_params: dict[str, float]) -> None:  # pyright: ignore[reportUnknownParameterType]
+        """With no `capital` param, default to 1 contract; capital = first price × 100."""
         dates, prices = rising_market
         summary, _, _ = run_cc_overlay(dates, prices, default_params)
-        assert summary['initial_cost'] == pytest.approx(prices[0] * 100, abs=0.01)
+        assert summary['num_contracts'] == 1
+        assert summary['capital'] == pytest.approx(prices[0] * 100, abs=0.01)
+        assert summary['cash'] == pytest.approx(0.0, abs=0.01)
 
     def test_flat_market_positive_premium(self, flat_market: tuple[list[str], np.ndarray[Any, np.dtype[np.float64]]], default_params: dict[str, float]) -> None:  # pyright: ignore[reportUnknownParameterType]
         """In a flat market, CC overlay should collect positive premiums."""
@@ -375,6 +380,43 @@ class TestRunCcOverlay:
         # (could be slightly above due to premiums or below due to assignment costs)
         assert summary['final_equity'] > final_stock_value * 0.5
 
+    def test_buy_hold_matches_final_price(self, rising_market: tuple[list[str], np.ndarray[Any, np.dtype[np.float64]]], default_params: dict[str, float]) -> None:  # pyright: ignore[reportUnknownParameterType]
+        """buy_hold_final = final price × shares + cash."""
+        dates, prices = rising_market
+        summary, _, _ = run_cc_overlay(dates, prices, default_params)
+        shares = 100 * summary['num_contracts']
+        expected = prices[-1] * shares + summary['cash']
+        assert summary['buy_hold_final'] == pytest.approx(expected, abs=0.01)
+
+    def test_excess_return_is_difference(self, rising_market: tuple[list[str], np.ndarray[Any, np.dtype[np.float64]]], default_params: dict[str, float]) -> None:  # pyright: ignore[reportUnknownParameterType]
+        """excess_return_pct = total_return_pct - buy_hold_return_pct."""
+        dates, prices = rising_market
+        summary, _, _ = run_cc_overlay(dates, prices, default_params)
+        expected = summary['total_return_pct'] - summary['buy_hold_return_pct']
+        assert summary['excess_return_pct'] == pytest.approx(expected, abs=0.01)
+
+    def test_net_overlay_pnl_equals_excess_dollars(self, rising_market: tuple[list[str], np.ndarray[Any, np.dtype[np.float64]]], default_params: dict[str, float]) -> None:  # pyright: ignore[reportUnknownParameterType]
+        """net_overlay_pnl = final_equity - buy_hold_final (the dollar gap)."""
+        dates, prices = rising_market
+        summary, _, _ = run_cc_overlay(dates, prices, default_params)
+        expected = summary['final_equity'] - summary['buy_hold_final']
+        assert summary['net_overlay_pnl'] == pytest.approx(expected, abs=0.01)
+
+    def test_overlay_costs_equation(self, rising_market: tuple[list[str], np.ndarray[Any, np.dtype[np.float64]]], default_params: dict[str, float]) -> None:  # pyright: ignore[reportUnknownParameterType]
+        """gross_premium - overlay_costs = net_overlay_pnl."""
+        dates, prices = rising_market
+        summary, _, _ = run_cc_overlay(dates, prices, default_params)
+        expected = summary['total_premium_collected'] - summary['overlay_costs']
+        assert summary['net_overlay_pnl'] == pytest.approx(expected, abs=0.01)
+
+    def test_premium_retention_pct(self, rising_market: tuple[list[str], np.ndarray[Any, np.dtype[np.float64]]], default_params: dict[str, float]) -> None:  # pyright: ignore[reportUnknownParameterType]
+        """premium_retention_pct = net_overlay_pnl / gross_premium × 100."""
+        dates, prices = rising_market
+        summary, _, _ = run_cc_overlay(dates, prices, default_params)
+        if summary['total_premium_collected'] > 0:
+            expected = summary['net_overlay_pnl'] / summary['total_premium_collected'] * 100
+            assert summary['premium_retention_pct'] == pytest.approx(expected, abs=0.1)
+
     def test_trade_actions_valid(self, rising_market: tuple[list[str], np.ndarray[Any, np.dtype[np.float64]]], default_params: dict[str, float]) -> None:  # pyright: ignore[reportUnknownParameterType]
         """All trade actions should be one of the expected values."""
         dates, prices = rising_market
@@ -382,6 +424,34 @@ class TestRunCcOverlay:
         valid_actions = {'sell', 'close', 'close_itm', 'expiration'}
         for trade in trades:
             assert trade['action'] in valid_actions
+
+    def test_capital_sizes_into_whole_contracts(self, rising_market: tuple[list[str], np.ndarray[Any, np.dtype[np.float64]]], default_params: dict[str, float]) -> None:  # pyright: ignore[reportUnknownParameterType]
+        """capital=$10K with $50 stock → 2 contracts ($10K stock + ~$0 cash)."""
+        dates, prices = rising_market  # rising_market starts at $50
+        params = {**default_params, 'capital': 10_000.0}
+        summary, _, _ = run_cc_overlay(dates, prices, params)
+        contract_cost = prices[0] * 100
+        assert summary['num_contracts'] == int(10_000 // contract_cost)
+        assert summary['initial_stock_cost'] == pytest.approx(
+            summary['num_contracts'] * 100 * prices[0], abs=0.01
+        )
+        assert summary['cash'] == pytest.approx(10_000 - summary['initial_stock_cost'], abs=0.01)
+
+    def test_capital_scales_premium_collected(self, rising_market: tuple[list[str], np.ndarray[Any, np.dtype[np.float64]]], default_params: dict[str, float]) -> None:  # pyright: ignore[reportUnknownParameterType]
+        """N contracts collect ~N× the premium of 1 contract on the same path."""
+        dates, prices = rising_market
+        single, _, _ = run_cc_overlay(dates, prices, default_params)
+        params = {**default_params, 'capital': 10_000.0}
+        multi, _, _ = run_cc_overlay(dates, prices, params)
+        ratio = multi['total_premium_collected'] / single['total_premium_collected']
+        assert ratio == pytest.approx(multi['num_contracts'], rel=0.01)
+
+    def test_capital_too_small_raises(self, rising_market: tuple[list[str], np.ndarray[Any, np.dtype[np.float64]]], default_params: dict[str, float]) -> None:  # pyright: ignore[reportUnknownParameterType]
+        """Capital below 1 contract should raise ValueError."""
+        dates, prices = rising_market
+        params = {**default_params, 'capital': 100.0}  # nowhere near 1 contract
+        with pytest.raises(ValueError, match="insufficient for 1 contract"):
+            run_cc_overlay(dates, prices, params)
 
 
 # ====================
