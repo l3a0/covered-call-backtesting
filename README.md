@@ -1,5 +1,7 @@
 # Covered Call Backtester
 
+[![CI](https://github.com/l3a0/covered-call-backtesting/actions/workflows/ci.yml/badge.svg)](https://github.com/l3a0/covered-call-backtesting/actions/workflows/ci.yml)
+
 A from-scratch Python backtester for the covered call overlay strategy. Prices options with Black-Scholes (using `math.erf` for high-precision CDF), estimates IV from rolling historical volatility with regime-based multipliers, and simulates day-by-day trade decisions over multi-year price histories.
 
 ## Quick start
