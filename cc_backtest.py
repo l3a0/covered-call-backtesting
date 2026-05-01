@@ -542,7 +542,7 @@ def compute_statistics(
     #   Var(mean) = (1/n) * [gamma_0 + 2 * sum_{k=1}^{L} w_k * gamma_k]
     # where gamma_k is the k-th autocovariance and w_k = 1 - k/(L+1)
     # are the Bartlett weights that enforce positive-definiteness.
-    L = max(1, int(4 * (n / 100) ** (2 / 9)))
+    L = int(4 * (n / 100) ** (2 / 9))
     nw_sum = 0.0
     for k in range(1, L + 1):
         weight = 1.0 - k / (L + 1)
@@ -550,9 +550,9 @@ def compute_statistics(
         cov_k = float(np.mean((excess[:-k] - mean_e) * (excess[k:] - mean_e)))
         nw_sum += weight * cov_k
     var_mean_nw = (var_e + 2 * nw_sum) / n
-    # Newey-West can in principle be negative at short samples; floor at
-    # a tiny positive to avoid sqrt of negative / division by zero.
-    se_nw = math.sqrt(max(var_mean_nw, 1e-20))
+    # Newey-West variance can be non-positive at short samples; floor at
+    # zero so se_nw == 0 trips the guard below and we report t_nw = 0.
+    se_nw = math.sqrt(max(var_mean_nw, 0.0))
     t_nw = mean_e / se_nw if se_nw > 0 else 0.0
 
     # Annualized context

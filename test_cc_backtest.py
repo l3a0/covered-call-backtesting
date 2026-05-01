@@ -693,6 +693,30 @@ class TestComputeStatistics:
         assert stats['passes_t_2'] is False
         assert stats['passes_t_3'] is False
 
+    def test_constant_nonzero_excess_yields_zero_t_stat(self) -> None:
+        """When excess returns are constant and non-zero, var = 0 → t_nw = 0.
+
+        NOT redundant with test_zero_excess_returns_give_zero_t_stat: there,
+        mean_e = 0 makes t_nw = 0 / se_nw = 0 regardless of se_nw, so the
+        floor doesn't matter. Here mean_e ≠ 0, so se_nw is what determines
+        the result. A previous implementation floored var_mean_nw at 1e-20,
+        which gave se_nw = 1e-10 and t_nw = mean / 1e-10 (huge garbage).
+        With the floor at 0, the se_nw > 0 guard correctly returns 0.
+        """
+        # Doubling each day → np.diff/equity[:-1] = 1.0 exactly (mul by 2
+        # is bit-exact in float64), so excess = 1.0 every day → var_e = 0
+        # exactly (no float noise). Flat prices → bh_ret = 0.
+        n = 30
+        prices = [100.0] * n
+        equity = [float(2 ** i) for i in range(n)]
+        daily_equity = _build_daily_equity(equity, prices)
+
+        stats = compute_statistics(daily_equity, num_contracts=1, cash=0.0)
+
+        assert stats['t_stat_naive'] == pytest.approx(0.0, abs=1e-9)
+        assert stats['t_stat_newey_west'] == pytest.approx(0.0, abs=1e-9)
+        assert math.isfinite(stats['t_stat_newey_west'])
+
     def test_consistent_positive_excess_produces_positive_t_stat(self) -> None:
         """A consistent overlay advantage should produce a positive, large t-stat."""
         # Flat prices → bh_ret = 0 every day → excess = overlay_ret directly.
@@ -740,13 +764,6 @@ class TestComputeStatistics:
 
     def test_passes_flags_reflect_newey_west_t_stat(self) -> None:
         """passes_t_2 and passes_t_3 should consistently reflect t_stat_newey_west."""
-        # Zero-excess case: both False
-        flat = _build_daily_equity([10_000.0] * 30, [100.0] * 30)
-        stats_flat = compute_statistics(flat, num_contracts=1, cash=0.0)
-        assert stats_flat['passes_t_2'] is False
-        assert stats_flat['passes_t_3'] is False
-
-        # Strong positive case: check flags align with |t_NW|
         np.random.seed(1)
         n = 1000
         prices = [100.0] * n
@@ -761,8 +778,7 @@ class TestComputeStatistics:
         assert stats_strong['passes_t_3'] == (abs(stats_strong['t_stat_newey_west']) > 3.0)
 
     def test_newey_west_lag_follows_andrews_rule(self) -> None:
-        """NW lag should follow L = floor(4 * (n/100)^(2/9)), with floor of 1."""
-        # n=2513 excess returns (one less than daily_equity length)
+        """NW lag should follow L = floor(4 * (n/100)^(2/9))."""
         n_equity = 2514
         prices = [100.0] * n_equity
         equity = [10_000.0 + i * 0.1 for i in range(n_equity)]
@@ -770,8 +786,9 @@ class TestComputeStatistics:
 
         stats = compute_statistics(daily_equity, num_contracts=1, cash=0.0)
 
+        # n=2513 excess returns (one less than daily_equity length)
         n_returns = n_equity - 1
-        expected_L = max(1, int(4 * (n_returns / 100) ** (2 / 9)))
+        expected_L = int(4 * (n_returns / 100) ** (2 / 9))
         assert stats['nw_lag'] == expected_L
 
     def test_raises_when_too_few_observations(self) -> None:
