@@ -2059,6 +2059,27 @@ where γₖ is the autocovariance of excess returns at lag k, and wₖ = 1 − k
 
 The lag cutoff follows Andrews (1991): `L = floor(4 · (n/100)^(2/9))`. For our 10-year MSFT sample (~2,500 days), that's 8 lags.
 
+The constants and exponent in that formula aren't decorative — they solve a real bias-variance tradeoff in choosing how far back to look for autocorrelation:
+
+- **Bias side.** Set L too small and you cut off lags that still have real autocorrelation. Newey-West then *still* underestimates the variance of the mean — you've fixed the IID assumption only partially.
+- **Variance side.** Set L too large and you start including lags where the *true* autocorrelation is essentially zero, but the *sample estimate* is just noise. Each near-zero noisy autocovariance you add jitters the variance estimator from sample to sample, so your standard error becomes unreliable in a different way.
+
+The optimum sits where the marginal reduction in bias equals the marginal increase in variance. For the Bartlett kernel weights `w_k = 1 − k/(L+1)`, that optimum scales as `n^(2/9)`. Andrews (1991) provided the theoretical framework; Newey & West (1994) made it operational with the specific constants `4 · (n/100)^(2/9)`, calibrated to give sensible lag counts across the sample sizes typical in econometrics. The `n/100` term is just a scaling anchor — at n = 100 the formula returns exactly 4, so think of "4 lags at 100 observations" as the calibration point and everything else as a slow extrapolation from there.
+
+The 2/9 exponent is small, so L grows slowly with sample size:
+
+| Sample size n | L = floor(4 · (n/100)^(2/9)) |
+| --- | --- |
+| 100 | 4 |
+| 500 | 5 |
+| 1,000 | 6 |
+| 2,500 | 8 |
+| 10,000 | 11 |
+
+Doubling your sample only buys you ~17% more lags (`2^(2/9) ≈ 1.17`). The formula is telling you that with more data, most of the extra information goes into *refining the autocovariances you're already estimating* — not chasing deeper lags whose estimates would be too noisy to trust. The behavior is also self-floored: at n = 2 (the minimum to have any variance at all) the formula returns 1, so you never need a separate `max(1, ...)` guard.
+
+The intuition transfers nicely. If your data has long memory (momentum factors, volatility clusters, slowly mean-reverting overlay P&L), the formula picks up enough lags to handle it. If the data is nearly IID, the few-lag NW correction barely changes the standard error from the naive version. Either way, it auto-adapts — you don't have to tune the bandwidth by hand for each dataset.
+
 This is the statistic to actually report.
 
 #### The Code
