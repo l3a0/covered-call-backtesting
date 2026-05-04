@@ -1021,20 +1021,19 @@ def run_cc_overlay(dates, prices, params):
         #     deviation is the square root of variance, so
         #         stdev(R_year) = sqrt(252) * stdev(r_daily).
         #     That's where the sqrt(252) comes from — it's a direct consequence
-        #     of "variance adds when returns are independent," not an arbitrary
-        #     convention. Caveat: real markets have volatility clustering and
-        #     fat tails, so this understates risk during crises; it's a useful
-        #     first approximation, not ground truth.
+        #     of "variance adds when returns are independent." Caveat: real
+        #     markets have volatility clustering and fat tails, so this
+        #     understates risk during crises; it's a useful first approximation,
+        #     not ground truth.
         #
         # Indexing: we want the window to END at today (day_idx) and never peek
         # at future prices. Python slicing is "half-open": `prices[a:b]` includes
         # index `a` but EXCLUDES index `b` — the start is closed (included), the
         # end is open (excluded), hence "half-open". So to include today's price
         # at index `day_idx`, we have to write `day_idx + 1` as the stop. That's
-        # why you see the `+1` everywhere below — it's not an off-by-one, it's
-        # the idiomatic way to say "up through today, inclusive." np.diff then
-        # turns N prices into N-1 returns, so a 30-price window yields 29 log
-        # returns.
+        # why you see the `+1` everywhere below — it's the idiomatic way to say
+        # "up through today, inclusive." np.diff then turns N prices into N-1
+        # returns, so a 30-price window yields 29 log returns.
         if day_idx < 3:
             # Warmup (day_idx < 3): fewer than 3 prices means 0 or 1 log
             # returns, so np.std() would return NaN (empty) or 0 (single
@@ -2059,7 +2058,7 @@ where γₖ is the autocovariance of excess returns at lag k, and wₖ = 1 − k
 
 The lag cutoff follows Andrews (1991): `L = floor(4 · (n/100)^(2/9))`. For our 10-year MSFT sample (~2,500 days), that's 8 lags.
 
-The constants and exponent in that formula aren't decorative — they solve a real bias-variance tradeoff in choosing how far back to look for autocorrelation:
+The constants and exponent in that formula solve a real bias-variance tradeoff in choosing how far back to look for autocorrelation:
 
 - **Bias side.** Set L too small and you cut off lags that still have real autocorrelation. Newey-West then *still* underestimates the variance of the mean — you've fixed the IID assumption only partially.
 - **Variance side.** Set L too large and you start including lags where the *true* autocorrelation is essentially zero, but the *sample estimate* is just noise. Each near-zero noisy autocovariance you add jitters the variance estimator from sample to sample, so your standard error becomes unreliable in a different way.
@@ -2636,20 +2635,19 @@ def run_cc_overlay(dates, prices, params):
         #     deviation is the square root of variance, so
         #         stdev(R_year) = sqrt(252) * stdev(r_daily).
         #     That's where the sqrt(252) comes from — it's a direct consequence
-        #     of "variance adds when returns are independent," not an arbitrary
-        #     convention. Caveat: real markets have volatility clustering and
-        #     fat tails, so this understates risk during crises; it's a useful
-        #     first approximation, not ground truth.
+        #     of "variance adds when returns are independent." Caveat: real
+        #     markets have volatility clustering and fat tails, so this
+        #     understates risk during crises; it's a useful first approximation,
+        #     not ground truth.
         #
         # Indexing: we want the window to END at today (day_idx) and never peek
         # at future prices. Python slicing is "half-open": `prices[a:b]` includes
         # index `a` but EXCLUDES index `b` — the start is closed (included), the
         # end is open (excluded), hence "half-open". So to include today's price
         # at index `day_idx`, we have to write `day_idx + 1` as the stop. That's
-        # why you see the `+1` everywhere below — it's not an off-by-one, it's
-        # the idiomatic way to say "up through today, inclusive." np.diff then
-        # turns N prices into N-1 returns, so a 30-price window yields 29 log
-        # returns.
+        # why you see the `+1` everywhere below — it's the idiomatic way to say
+        # "up through today, inclusive." np.diff then turns N prices into N-1
+        # returns, so a 30-price window yields 29 log returns.
         if day_idx < 3:
             # Warmup (day_idx < 3): fewer than 3 prices means 0 or 1 log
             # returns, so np.std() would return NaN (empty) or 0 (single
