@@ -2084,14 +2084,15 @@ def compute_statistics(daily_equity, num_contracts, cash, periods_per_year=252):
     t_naive = mean_e / math.sqrt(var_e / n)
 
     # Newey-West HAC: variance of the mean under autocorrelation
-    L = max(1, int(4 * (n / 100) ** (2 / 9)))
+    L = int(4 * (n / 100) ** (2 / 9))
     nw_sum = 0.0
     for k in range(1, L + 1):
         weight = 1.0 - k / (L + 1)
         cov_k = float(np.mean((excess[:-k] - mean_e) * (excess[k:] - mean_e)))
         nw_sum += weight * cov_k
     var_mean_nw = (var_e + 2 * nw_sum) / n
-    t_nw = mean_e / math.sqrt(max(var_mean_nw, 1e-20))
+    se_nw = math.sqrt(max(var_mean_nw, 0.0))  # NW variance can be < 0 at short n
+    t_nw = mean_e / se_nw if se_nw > 0 else 0.0
 
     return {
         't_stat_naive': round(t_naive, 2),
