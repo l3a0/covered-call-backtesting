@@ -1023,8 +1023,7 @@ def run_cc_overlay(dates, prices, params):
         #     That's where the sqrt(252) comes from — it's a direct consequence
         #     of "variance adds when returns are independent." Caveat: real
         #     markets have volatility clustering and fat tails, so this
-        #     understates risk during crises; it's a useful first approximation,
-        #     not ground truth.
+        #     understates risk during crises; it's a useful first approximation.
         #
         # Indexing: we want the window to END at today (day_idx) and never peek
         # at future prices. Python slicing is "half-open": `prices[a:b]` includes
@@ -2046,6 +2045,38 @@ This assumes daily observations are IID — Independent and Identically Distribu
 
 When IID is violated, the naive formula systematically *understates* the standard error, which inflates the t-stat by 30–100%. You think you have a real edge when you don't.
 
+#### Autocorrelation and Heteroskedasticity: What They Actually Mean
+
+The two IID failures we just named have proper names in the statistics literature, and those names are baked right into "Newey-West **HAC**" — **Heteroskedasticity and Autocorrelation Consistent**. Worth understanding each one before applying the fix, because both are everywhere in financial data and both inflate naive t-stats in slightly different ways.
+
+**Autocorrelation: when today depends on yesterday.**
+
+A series is *autocorrelated* when one observation gives you information about the next. The data has *memory*. Picture the difference between a coin flip and a thermostat-controlled room: the coin has zero memory (yesterday's result tells you nothing about today's), while the room temperature has lots of memory (if it was 72°F a minute ago, it's almost certainly 71–73°F now). Financial returns aren't quite the thermostat, but they're definitely not the coin flip either.
+
+Why this breaks naive t-stats: the formula `SE = σ/√n` quietly assumes each observation contributes one full unit of *independent* information. When observations are correlated, that's a lie — your effective sample size is smaller than `n`. The naive formula produces a too-small SE, which produces a too-large t-stat, which makes you believe in edges that aren't there.
+
+In our backtest, autocorrelation enters in three reinforcing ways:
+
+1. **Position lifecycle.** When we sell a 21-DTE call, that *same* option position drives the overlay's P&L for up to 21 days. Day 5 and day 6 aren't two independent draws — they're samples from one shared position.
+2. **Profit-target clustering.** The 75% close threshold tends to fire after stretches of stock-friendly days, which clusters close events and introduces serial correlation in the overlay's daily P&L.
+3. **Underlying market memory.** Returns themselves have mild momentum at short lags. Even before the overlay adds its own correlation, the price series isn't IID.
+
+**Heteroskedasticity: when the variance moves.**
+
+A series is *heteroskedastic* when its variance changes over time. Some periods are calmer; some are wilder. Variance isn't a constant property of the series — it's a moving target. Think of the ocean: waves are a different size on a windy day vs. a calm day. Try to summarize "the ocean's wave height" with one number and you'll be roughly right on average but dramatically wrong about both individual days.
+
+Why this also breaks naive t-stats: a standard error that assumes constant variance is doing exactly the ocean thing — averaging over periods that have genuinely different volatility. The composite SE is biased: too small in calm periods, too big in volatile ones. Across the full sample you can over- or under-state significance depending on how the high-vol periods coincide with your signal.
+
+In our backtest, heteroskedasticity is everywhere. Volatility clusters in equities — a documented stylized fact for at least 50 years (Engle's 1982 ARCH paper, Mandelbrot's 1963 cotton-prices paper). The MSFT data spans calm 2017, the COVID volatility spike of 2020, the 2022 rate-hike sell-off, and 2024's renewed mega-cap bull run, each with materially different return variance. Our own `detect_regime()` function literally encodes this: it classifies each day as low / normal / high vol, explicitly acknowledging that returns come from different distributions. That classification *is* heteroskedasticity in code form.
+
+**Why it matters that HAC handles both.**
+
+Newey-West is built around *sample autocovariances at each lag* rather than a single global variance assumption. The lag-0 autocovariance — i.e., the variance itself — is estimated directly from the data, so heteroskedasticity in the level of variance is handled by simply not assuming the variance is constant. The lag-1, lag-2, ..., lag-L autocovariances handle the autocorrelation. Two violations, one estimator.
+
+That's the promise of the "C" (consistent) in HAC: **as your sample grows, the HAC standard error gets closer and closer to the truth**. The naive standard error doesn't have this property under autocorrelated data — give it a million more observations and it just becomes more confidently wrong. Picture a pollster using a broken sampling method: with 100 voters their estimate is off, with 10 million voters it's still off by the same amount, just with tighter "confidence" around the wrong answer. That's the naive estimator. HAC is the pollster who fixes the method, so each additional observation actually pulls the estimate toward the right number. At any finite sample (like our 2,500 days) HAC has a small wobble that shrinks as you collect more data; the naive formula has a structural bug that more data can't fix.
+
+This is why HAC is the default standard-error tool in modern empirical finance. Any time-series regression that assumes IID errors is making both these mistakes silently. HAC is what you reach for when you want the t-stat to mean what it claims to mean.
+
 #### The Newey-West Fix
 
 The Newey-West correction widens the standard error to account for autocorrelation:
@@ -2637,8 +2668,7 @@ def run_cc_overlay(dates, prices, params):
         #     That's where the sqrt(252) comes from — it's a direct consequence
         #     of "variance adds when returns are independent." Caveat: real
         #     markets have volatility clustering and fat tails, so this
-        #     understates risk during crises; it's a useful first approximation,
-        #     not ground truth.
+        #     understates risk during crises; it's a useful first approximation.
         #
         # Indexing: we want the window to END at today (day_idx) and never peek
         # at future prices. Python slicing is "half-open": `prices[a:b]` includes
