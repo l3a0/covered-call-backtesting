@@ -2319,6 +2319,15 @@ Here's the complete process:
 6. **Slippage modeling:** Account for bid-ask widening on high-volatility days
 7. **Strategy-vs-cash significance test:** Add a second mode to `compute_statistics` that benchmarks the CC strategy's *total* return against the risk-free rate (not against buy-and-hold). This is the comparison the academic VRP literature reports, and it's the right way to put our backtest on equal footing with published BXM/PUT t-stats
 8. **Index ETF test:** Run the same strategy on SPY or QQQ. Single-stock VRP is structurally weaker than index VRP because index options have richer insurance demand. If the t-stat moves substantially toward the academic range when we switch underlyings, that confirms the gap was about *what* we backtested, not *how* we backtested
+9. **Risk-managed (delta-hedged) covered call mode:** Add a `delta_hedge` flag to `params` that, when enabled, buys or sells underlying shares each day to keep the portfolio's net delta pinned at `base_shares` — regardless of where the short call's delta sits. Conceptual basis in the callout below. Costs ~25–30% more capital (you're holding extra shares to offset the call's negative delta) but produces a meaningfully cleaner test of whether the volatility risk premium is actually being captured
+
+> **Lessons from Israelov & Nielsen (2015), "Covered Calls Uncovered"** ([CFA Institute](https://rpc.cfainstitute.org/research/financial-analysts-journal/2015/covered-calls-uncovered))
+>
+> A covered call's return decomposes exactly into three parts: (1) passive equity exposure, (2) short volatility exposure — the VRP, and (3) a hidden *equity-timing* exposure that nobody explicitly chose. The third one is mechanical: as the stock rallies, the short call's delta rises and your *effective* stock exposure shrinks; as the stock sells off, delta falls and your effective exposure grows. You're being forced to lighten up into rallies and add into selloffs, on autopilot.
+>
+> Components 1 and 2 are real, persistent, harvestable premiums. Component 3 is essentially zero in expectation but adds substantial variance — it's a coin flip you didn't sign up for. The paper's prescriptive fix is the **risk-managed covered call**: dynamically rebalance the underlying share position so the portfolio's net delta stays pinned at the buy-and-hold equivalent (e.g., 100 shares for a 1-contract position). Same equity exposure as buy-and-hold, plus the vol premium, minus the equity-timing wiggle.
+>
+> The implementation is one extra block in the daily loop: compute `target_shares = base_shares + abs(call_delta) * 100 * num_contracts`, then buy or sell shares to match. The expected effect on our backtest is **a higher Sharpe of excess returns and a higher Newey-West t-stat — not because alpha increases, but because we've stopped measuring an exposure that contributes variance without contributing return**. That's the cleanest way to test whether the VRP is showing up on this underlying. Item 9 above operationalizes it.
 
 ---
 
@@ -3039,6 +3048,44 @@ Good luck. Covered call trading is not exciting, but it's one of the most reliab
 
 ---
 
-**Acknowledgments:** This tutorial synthesizes best practices from QuantConnect, CBOE education, and quantitative finance textbooks. All code examples are original.
+## References
+
+Academic papers cited or built on in this tutorial. URLs link to the publishers' canonical landing pages where I'm reasonably sure of the exact URL; for the rest, the citation alone should be enough to find the paper on Google Scholar.
+
+### Option pricing
+
+- Black, F. & Scholes, M. (1973). "The Pricing of Options and Corporate Liabilities." *Journal of Political Economy*, 81(3), 637–654. ([JSTOR](https://www.jstor.org/stable/1831029))
+
+### Volatility risk premium
+
+- Bakshi, G. & Kapadia, N. (2003). "Delta-Hedged Gains and the Negative Market Volatility Risk Premium." *Review of Financial Studies*, 16(2), 527–566. ([Oxford Academic](https://academic.oup.com/rfs/article-abstract/16/2/527/1605194))
+- Coval, J. D. & Shumway, T. (2001). "Expected Option Returns." *Journal of Finance*, 56(3), 983–1009. ([Wiley](https://onlinelibrary.wiley.com/doi/10.1111/0022-1082.00352))
+- Israelov, R. & Nielsen, L. N. (2015). "Covered Calls Uncovered." *Financial Analysts Journal*, 71(6). ([CFA Institute](https://rpc.cfainstitute.org/research/financial-analysts-journal/2015/covered-calls-uncovered))
+
+### Heteroskedasticity and volatility clustering
+
+- Engle, R. F. (1982). "Autoregressive Conditional Heteroskedasticity with Estimates of the Variance of United Kingdom Inflation." *Econometrica*, 50(4), 987–1007. ([JSTOR](https://www.jstor.org/stable/1912773))
+- Mandelbrot, B. (1963). "The Variation of Certain Speculative Prices." *Journal of Business*, 36(4), 394–419. ([JSTOR](https://www.jstor.org/stable/2350970))
+
+### HAC standard errors and t-statistics
+
+- Andrews, D. W. K. (1991). "Heteroskedasticity and Autocorrelation Consistent Covariance Matrix Estimation." *Econometrica*, 59(3), 817–858. ([JSTOR](https://www.jstor.org/stable/2938229))
+- Newey, W. K. & West, K. D. (1987). "A Simple, Positive Semi-Definite, Heteroskedasticity and Autocorrelation Consistent Covariance Matrix." *Econometrica*, 55(3), 703–708. ([JSTOR](https://www.jstor.org/stable/1913610))
+- Newey, W. K. & West, K. D. (1994). "Automatic Lag Selection in Covariance Matrix Estimation." *Review of Economic Studies*, 61(4), 631–653. ([RePEc](https://ideas.repec.org/p/att/wimass/9220.html))
+- Harvey, C. R., Liu, Y. & Zhu, H. (2016). "...and the Cross-Section of Expected Returns." *Review of Financial Studies*, 29(1), 5–68. ([Oxford Academic](https://academic.oup.com/rfs/article-abstract/29/1/5/1843824))
+
+### Indices and benchmarks
+
+- CBOE S&P 500 BuyWrite Index (BXM). ([cboe.com](https://www.cboe.com/us/indices/dashboard/BXM/))
+- CBOE S&P 500 PutWrite Index (PUT). ([cboe.com](https://www.cboe.com/us/indices/dashboard/PUT/))
+- CBOE S&P 500 30-Delta BuyWrite Index (BXMD). ([cboe.com](https://www.cboe.com/us/indices/dashboard/BXMD/))
+
+For textbooks (Hull, Natenberg, Taleb) and educational platforms (QuantConnect, OptionMetrics, CBOE), see the "Resources for Further Learning" section in Part 7.
+
+## Provenance & Disclaimer
+
+This tutorial was drafted in collaboration with Claude (Anthropic) — the prose, structure, and code in `cc_backtest.py` and `test_cc_backtest.py` were generated through extended back-and-forth between the author and the model. The code is unit-tested and runs correctly on the bundled MSFT data, but you should still review it before relying on it for real money: both for correctness on your own data and for whether the modeling choices baked in (Black-Scholes pricing instead of market quotes, regime-based IV multipliers instead of measured IV, fixed slippage and commission assumptions) match your actual broker, instruments, and tolerance for tail risk. AI-generated citations and derivations occasionally drift from the primary sources, so treat everything here as a starting point rather than gospel. The references above are the original published papers — those are what any claim in this tutorial should be checked against.
+
+The author is a learner working through these ideas, not a credentialed quant or financial advisor. Nothing in this tutorial is investment advice.
 
 **Last updated:** May 2026
