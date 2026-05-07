@@ -18,6 +18,10 @@
 5. [Part 5: Robustness Checks — Proving It's Not Luck](#part-5-robustness-checks--proving-its-not-luck)
 6. [Part 6: Putting It All Together](#part-6-putting-it-all-together)
 7. [Part 7: Key Takeaways & Cheat Sheet](#part-7-key-takeaways--cheat-sheet)
+8. [Appendix A: The Code](#appendix-a-the-code)
+9. [Appendix B: Common Pitfalls and How to Avoid Them](#appendix-b-common-pitfalls-and-how-to-avoid-them)
+10. [References](#references)
+11. [Provenance & Disclaimer](#provenance--disclaimer)
 
 ---
 
@@ -38,7 +42,7 @@ Before diving in, here are a few terms you'll see throughout this tutorial:
 - **IID (Independent and Identically Distributed):** Two assumptions baked into most introductory statistics formulas. *Independent* means each observation tells you nothing about any others (like fair coin flips). *Identically distributed* means every observation comes from the same probability distribution (same bag of marbles each draw). Financial returns rarely satisfy either — they cluster in volatility regimes (not identical) and they autocorrelate through position holding (not independent). Naive t-stat formulas assume IID and inflate when it's violated.
 - **IV (Implied Volatility):** What the market thinks future volatility will be, baked into the option price. Since we don't have real IV data, we estimate it using a regime-based multiplier on HV (1.1× in high-vol regimes, 1.3× in normal, 1.5× in low-vol).
 - **Lag:** How many time periods back you look when comparing observations in a time series. "Lag 1" means yesterday's value, "lag 5" means the value from 5 days ago, and so on. The *autocovariance at lag k* measures how much today's observation correlates with the observation `k` periods earlier — at lag 0 this is just the variance (correlation of a value with itself), at lag 1 it's the same-as-yesterday correlation, etc. Newey-West sums weighted autocovariances from lag 0 up to a chosen *lag cutoff* `L`, picked big enough to capture meaningful autocorrelation but small enough to avoid pulling in noisy near-zero terms.
-- **Newey-West HAC (NW):** A correction to standard errors that accounts for autocorrelation and heteroskedasticity in time-series data — both common in financial returns. Often abbreviated **NW** in code and prose. HAC stands for "Heteroskedasticity and Autocorrelation Consistent." For an overlay strategy, where the same option position drives multiple consecutive days of P&L, naive standard errors are too small (consecutive days aren't independent observations) and naive t-stats are inflated. Newey-West fixes this by widening the standard error to reflect the actual independent information in the sample. Lag cutoff in our backtest follows Andrews (1991): `L = floor(4 · (n/100)^(2/9))`.
+- **Newey-West HAC (NW):** A correction to standard errors that accounts for autocorrelation and heteroskedasticity in time-series data — both common in financial returns. Often abbreviated **NW** in code and prose. HAC stands for "Heteroskedasticity and Autocorrelation Consistent." *Heteroskedasticity* means the variance changes over time (the stock is calm one week, volatile the next); *autocorrelation* means consecutive observations are correlated (today's value tells you something about tomorrow's). For an overlay strategy, where the same option position drives multiple consecutive days of P&L, naive standard errors are too small (consecutive days aren't independent observations) and naive t-stats are inflated. Newey-West fixes both at once by widening the standard error to reflect the actual independent information in the sample. Lag cutoff in our backtest is `L = floor(4 · (n/100)^(2/9))` — the framework comes from Andrews (1991); the specific operational formula is from Newey & West (1994).
 - **OTM (Out of the Money):** A call option where the strike price is above the current stock price (the buyer wouldn't exercise yet). We sell OTM calls to collect premium while giving the stock room to grow.
 - **PDF (Probability Density Function):** The "height" of the bell curve at a given point. While the CDF measures the area under the curve (a cumulative probability), the PDF measures how tall the curve is at one specific value. We need it inside the CDF approximation formula — the approximation works by multiplying the PDF (height) by a polynomial correction to estimate the CDF (area).
 - **Premium:** The price the option buyer pays you. This is your income as a covered call seller.
@@ -2061,7 +2065,7 @@ In our backtest, autocorrelation enters in three reinforcing ways:
 
 1. **Position lifecycle.** When we sell a 21-DTE call, that *same* option position drives the overlay's P&L for up to 21 days. Day 5 and day 6 aren't two independent draws — they're samples from one shared position.
 2. **Profit-target clustering.** The 75% close threshold tends to fire after stretches of stock-friendly days, which clusters close events and introduces serial correlation in the overlay's daily P&L.
-3. **Underlying market memory.** Returns themselves have mild momentum at short lags. Even before the overlay adds its own correlation, the price series isn't IID.
+3. **Underlying market memory.** Returns themselves have mild *momentum* (the tendency of returns to keep moving in the same direction) at short lags. Even before the overlay adds its own correlation, the price series isn't IID.
 
 **Heteroskedasticity: when the variance moves.**
 
@@ -2087,7 +2091,7 @@ The Newey-West correction widens the standard error to account for autocorrelati
 Var(mean) = (1/n) · [γ₀ + 2 · Σₖ wₖ · γₖ]
 ```
 
-where γₖ is the autocovariance of excess returns at lag k, and wₖ = 1 − k/(L+1) are Bartlett weights that taper smoothly to zero. Intuitively: Newey-West asks "how much *effectively independent* information do I have, given that consecutive observations are correlated?" — then sizes the standard error accordingly.
+where γₖ is the autocovariance of excess returns at lag k, and wₖ = 1 − k/(L+1) are Bartlett weights — a smoothing kernel that gives lag 0 full weight, then tapers linearly to zero at lag L, ensuring distant noisy lags don't blow up the variance estimate. Intuitively: Newey-West asks "how much *effectively independent* information do I have, given that consecutive observations are correlated?" — then sizes the standard error accordingly.
 
 The lag cutoff follows Andrews (1991): `L = floor(4 · (n/100)^(2/9))`. For our 10-year MSFT sample (~2,500 days), that's 8 lags.
 
@@ -2179,7 +2183,7 @@ There's a useful shortcut buried in the math: **t-stat ≈ Sharpe × √(years)*
 
 Usually Newey-West shrinks the t-stat — that's the whole point of the correction. In our case, naive (0.51) is slightly *smaller* than NW (0.58). What gives?
 
-Newey-West can move the t-stat in either direction depending on the *sign* of short-lag autocovariances. If consecutive excess returns are positively correlated (a position held across days produces correlated P&L), NW shrinks the t-stat. If they're *negatively* correlated (mean reversion in daily excess returns), NW *inflates* it because the data has more "effective" sample than a naive count of days suggests.
+Newey-West can move the t-stat in either direction depending on the *sign* of short-lag autocovariances. If consecutive excess returns are positively correlated (a position held across days produces correlated P&L), NW shrinks the t-stat. If they're *negatively* correlated — *mean reversion*, the tendency for returns to bounce back toward their average — NW *inflates* the t-stat because the data has more "effective" sample than a naive count of days suggests.
 
 Our excess returns show mild day-to-day mean reversion — likely from the way profit-target closes and position re-opens introduce alternation between premium-collection days and gap days. Either way the conclusion stands: t = 0.58 is firmly below any meaningful threshold.
 
@@ -2319,7 +2323,7 @@ Here's the complete process:
 6. **Slippage modeling:** Account for bid-ask widening on high-volatility days
 7. **Strategy-vs-cash significance test:** Add a second mode to `compute_statistics` that benchmarks the CC strategy's *total* return against the risk-free rate (not against buy-and-hold). This is the comparison the academic VRP literature reports, and it's the right way to put our backtest on equal footing with published BXM/PUT t-stats
 8. **Index ETF test:** Run the same strategy on SPY or QQQ. Single-stock VRP is structurally weaker than index VRP because index options have richer insurance demand. If the t-stat moves substantially toward the academic range when we switch underlyings, that confirms the gap was about *what* we backtested, not *how* we backtested
-9. **Risk-managed (delta-hedged) covered call mode:** Add a `delta_hedge` flag to `params` that, when enabled, buys or sells underlying shares each day to keep the portfolio's net delta pinned at `base_shares` — regardless of where the short call's delta sits. Conceptual basis in the callout below. Costs ~25–30% more capital (you're holding extra shares to offset the call's negative delta) but produces a meaningfully cleaner test of whether the volatility risk premium is actually being captured
+9. **Risk-managed (delta-hedged) covered call mode:** Add a `delta_hedge` flag to `params` that, when enabled, buys or sells underlying shares each day to keep the portfolio's net delta pinned at `base_shares` — regardless of where the short call's delta sits. *Delta-hedging* is the practice of continuously trading the underlying to neutralize an option's directional exposure. Conceptual basis in the callout below. Costs ~25–30% more capital (you're holding extra shares to offset the call's negative delta) but produces a meaningfully cleaner test of whether the volatility risk premium is actually being captured
 
 > **Lessons from Israelov & Nielsen (2015), "Covered Calls Uncovered"** ([CFA Institute](https://rpc.cfainstitute.org/research/financial-analysts-journal/2015/covered-calls-uncovered))
 >
@@ -2327,7 +2331,7 @@ Here's the complete process:
 >
 > Components 1 and 2 are real, persistent, harvestable premiums. Component 3 is essentially zero in expectation but adds substantial variance — it's a coin flip you didn't sign up for. The paper's prescriptive fix is the **risk-managed covered call**: dynamically rebalance the underlying share position so the portfolio's net delta stays pinned at the buy-and-hold equivalent (e.g., 100 shares for a 1-contract position). Same equity exposure as buy-and-hold, plus the vol premium, minus the equity-timing wiggle.
 >
-> The implementation is one extra block in the daily loop: compute `target_shares = base_shares + abs(call_delta) * 100 * num_contracts`, then buy or sell shares to match. The expected effect on our backtest is **a higher Sharpe of excess returns and a higher Newey-West t-stat — not because alpha increases, but because we've stopped measuring an exposure that contributes variance without contributing return**. That's the cleanest way to test whether the VRP is showing up on this underlying. Item 9 above operationalizes it.
+> The implementation is one extra block in the daily loop: compute `target_shares = base_shares + abs(call_delta) * 100 * num_contracts`, then buy or sell shares to match. The expected effect on our backtest is **a higher Sharpe of excess returns and a higher Newey-West t-stat — not because alpha (excess return beyond what the benchmark explains) increases, but because we've stopped measuring an exposure that contributes variance without contributing return**. That's the cleanest way to test whether the VRP is showing up on this underlying. Item 9 above operationalizes it.
 
 ---
 

@@ -190,8 +190,11 @@ def run_cc_overlay(
               whole 100-share contracts at initial_price; any leftover sits
               as uninvested cash (0% yield). Default: cost of 1 contract.
 
-        IV estimation uses the regime-based detect_regime() + estimate_iv()
-        functions (multiplier varies: 1.1× in high vol, 1.3× normal, 1.5× low).
+    IV is *not* a tunable parameter. It is computed internally each day
+    from rolling 30-day historical volatility, then scaled by a
+    regime-based multiplier (1.1× in high-vol regimes, 1.3× in normal,
+    1.5× in low-vol) via detect_regime() and estimate_iv(). Any
+    `iv_multiplier` key in `params` is silently ignored.
 
     Returns:
         (summary, trades, daily_equity)
@@ -486,9 +489,10 @@ def compute_statistics(
       too small and naive t-stats are inflated.
 
     - `t_stat_newey_west` uses Newey-West HAC (heteroskedasticity and
-      autocorrelation consistent) standard errors. Lag cutoff follows
-      Andrews (1991): L = floor(4 * (n/100)^(2/9)). This is the
-      correct statistic for an overlay.
+      autocorrelation consistent) standard errors. Lag cutoff
+      L = floor(4 * (n/100)^(2/9)) — the framework is from Andrews
+      (1991); this specific operational formula is from Newey & West
+      (1994). This is the correct statistic for an overlay.
 
     Interpretation thresholds (Harvey, Liu & Zhu 2016):
         |t_NW| > 3.0  → likely a real effect after multiple-testing

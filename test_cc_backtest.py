@@ -295,7 +295,6 @@ class TestRunCcOverlay:
             'close_at_pct': 0.75,
             'dte': 21,
             'risk_free_rate': 0.045,
-            'iv_multiplier': 1.3,
         }
 
     def test_returns_three_items(self, rising_market: tuple[list[str], np.ndarray[Any, np.dtype[np.float64]]], default_params: dict[str, float]) -> None:  # pyright: ignore[reportUnknownParameterType]
@@ -482,7 +481,6 @@ class TestScenarioFlatMarket:
             'close_at_pct': 0.75,
             'dte': 21,
             'risk_free_rate': 0.045,
-            'iv_multiplier': 1.3,
         }
         return dates, prices, params
 
@@ -531,7 +529,7 @@ class TestScenarioCalledAway:
         dates = _fake_dates(len(prices))
         params: dict[str, float] = {
             'call_delta': 0.25, 'close_at_pct': 0.75, 'dte': 21,
-            'risk_free_rate': 0.045, 'iv_multiplier': 1.3,
+            'risk_free_rate': 0.045,
         }
         _, trades, _ = run_cc_overlay(dates, prices, params)
 
@@ -559,7 +557,7 @@ class TestScenarioProfitTargetClose:
         dates = _fake_dates(len(prices))
         params: dict[str, float] = {
             'call_delta': 0.25, 'close_at_pct': 0.75, 'dte': 21,
-            'risk_free_rate': 0.045, 'iv_multiplier': 1.3,
+            'risk_free_rate': 0.045,
         }
         _, trades, _ = run_cc_overlay(dates, prices, params)
 
@@ -583,7 +581,7 @@ class TestScenarioMultipleCycles:
         dates = _fake_dates(100)
         params: dict[str, float] = {
             'call_delta': 0.25, 'close_at_pct': 0.75, 'dte': 21,
-            'risk_free_rate': 0.045, 'iv_multiplier': 1.3,
+            'risk_free_rate': 0.045,
         }
         summary, trades, _ = run_cc_overlay(dates, prices, params)
 
@@ -609,7 +607,7 @@ class TestScenarioPnlAccumulation:
         dates = _fake_dates(80)
         params: dict[str, float] = {
             'call_delta': 0.25, 'close_at_pct': 0.75, 'dte': 21,
-            'risk_free_rate': 0.045, 'iv_multiplier': 1.3,
+            'risk_free_rate': 0.045,
         }
         _, trades, _ = run_cc_overlay(dates, prices, params)
 
@@ -631,7 +629,7 @@ class TestScenarioEquityFinalState:
         dates = _fake_dates(60)
         params: dict[str, float] = {
             'call_delta': 0.25, 'close_at_pct': 0.75, 'dte': 21,
-            'risk_free_rate': 0.045, 'iv_multiplier': 1.3,
+            'risk_free_rate': 0.045,
         }
         summary, trades, daily_equity = run_cc_overlay(dates, prices, params)
 
