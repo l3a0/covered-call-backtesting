@@ -118,7 +118,7 @@ If I asked you, "How much should I charge for car insurance for a 25-year-old?" 
 - How much will I earn from interest on the premiums? (interest rate)
 - What's the current car value? (stock price)
 
-The **Black-Scholes model** is exactly that recipe. It takes five ingredients and spits out a fair premium.
+The **Black-Scholes model** ([Black & Scholes, 1973](https://www.jstor.org/stable/1831029)) is exactly that recipe. It takes five ingredients and spits out a fair premium.
 
 For covered calls, we'll use Black-Scholes to *estimate* what an option should cost when we can't buy real option data.
 
@@ -164,7 +164,7 @@ A high σ (volatility) makes the denominator huge, so d₁ stays closer to zero.
 N(d₁) = probability that the stock ends up in-the-money
 ```
 
-This requires the **cumulative normal distribution function (CDF)** — the function that converts a z-score into a probability (see Glossary above). We'll use the Abramowitz & Stegun approximation.
+This requires the **cumulative normal distribution function (CDF)** — the function that converts a z-score into a probability (see Glossary above). We'll use the [Abramowitz & Stegun approximation](https://en.wikipedia.org/wiki/Abramowitz_and_Stegun).
 
 #### Step 3: Calculate the call option price
 
@@ -2023,7 +2023,7 @@ The t-statistic formalizes this. It asks: **how many standard errors above zero 
 Two thresholds to remember:
 
 - **|t| > 2** — Fisher's traditional bar. ~5% chance of occurring under the null. The textbook line for "statistically significant."
-- **|t| > 3** — Harvey, Liu & Zhu's stricter bar from their 2016 paper. They argue that because finance has tested hundreds of factors, many "significant" |t| ≈ 2 results are just the lucky ones from a wide search. Three is the honest bar once you account for multiple testing.
+- **|t| > 3** — [Harvey, Liu & Zhu's stricter bar from their 2016 paper](https://academic.oup.com/rfs/article-abstract/29/1/5/1843824). They argue that because finance has tested hundreds of factors, many "significant" |t| ≈ 2 results are just the lucky ones from a wide search. Three is the honest bar once you account for multiple testing.
 
 #### What We're Actually Testing
 
@@ -2073,7 +2073,7 @@ A series is *heteroskedastic* when its variance changes over time. Some periods 
 
 Why this also breaks naive t-stats: a standard error that assumes constant variance is doing exactly the ocean thing — averaging over periods that have genuinely different volatility. The composite SE is biased: too small in calm periods, too big in volatile ones. Across the full sample you can over- or under-state significance depending on how the high-vol periods coincide with your signal.
 
-In our backtest, heteroskedasticity is everywhere. Volatility clusters in equities — a documented stylized fact for at least 50 years (Engle's 1982 ARCH paper, Mandelbrot's 1963 cotton-prices paper). The MSFT data spans calm 2017, the COVID volatility spike of 2020, the 2022 rate-hike sell-off, and 2024's renewed mega-cap bull run, each with materially different return variance. Our own `detect_regime()` function literally encodes this: it classifies each day as low / normal / high vol, explicitly acknowledging that returns come from different distributions. That classification *is* heteroskedasticity in code form.
+In our backtest, heteroskedasticity is everywhere. Volatility clusters in equities — a documented stylized fact for at least 50 years ([Engle's 1982 ARCH paper](https://www.jstor.org/stable/1912773), [Mandelbrot's 1963 cotton-prices paper](https://www.jstor.org/stable/2350970)). The MSFT data spans calm 2017, the COVID volatility spike of 2020, the 2022 rate-hike sell-off, and 2024's renewed mega-cap bull run, each with materially different return variance. Our own `detect_regime()` function literally encodes this: it classifies each day as low / normal / high vol, explicitly acknowledging that returns come from different distributions. That classification *is* heteroskedasticity in code form.
 
 **Why it matters that HAC handles both.**
 
@@ -2093,14 +2093,14 @@ Var(mean) = (1/n) · [γ₀ + 2 · Σₖ wₖ · γₖ]
 
 where γₖ is the autocovariance of excess returns at lag k, and wₖ = 1 − k/(L+1) are Bartlett weights — a smoothing kernel that gives lag 0 full weight, then tapers linearly to zero at lag L, ensuring distant noisy lags don't blow up the variance estimate. Intuitively: Newey-West asks "how much *effectively independent* information do I have, given that consecutive observations are correlated?" — then sizes the standard error accordingly.
 
-The lag cutoff follows Andrews (1991): `L = floor(4 · (n/100)^(2/9))`. For our 10-year MSFT sample (~2,500 days), that's 8 lags.
+The lag cutoff follows [Andrews (1991)](https://www.jstor.org/stable/2938229): `L = floor(4 · (n/100)^(2/9))`. For our 10-year MSFT sample (~2,500 days), that's 8 lags.
 
 The constants and exponent in that formula solve a real bias-variance tradeoff in choosing how far back to look for autocorrelation:
 
 - **Bias side.** Set L too small and you cut off lags that still have real autocorrelation. Newey-West then *still* underestimates the variance of the mean — you've fixed the IID assumption only partially.
 - **Variance side.** Set L too large and you start including lags where the *true* autocorrelation is essentially zero, but the *sample estimate* is just noise. Each near-zero noisy autocovariance you add jitters the variance estimator from sample to sample, so your standard error becomes unreliable in a different way.
 
-The optimum sits where the marginal reduction in bias equals the marginal increase in variance. For the Bartlett kernel weights `w_k = 1 − k/(L+1)`, that optimum scales as `n^(2/9)`. Andrews (1991) provided the theoretical framework; Newey & West (1994) made it operational with the specific constants `4 · (n/100)^(2/9)`, calibrated to give sensible lag counts across the sample sizes typical in econometrics. The `n/100` term is just a scaling anchor — at n = 100 the formula returns exactly 4, so think of "4 lags at 100 observations" as the calibration point and everything else as a slow extrapolation from there.
+The optimum sits where the marginal reduction in bias equals the marginal increase in variance. For the Bartlett kernel weights `w_k = 1 − k/(L+1)`, that optimum scales as `n^(2/9)`. Andrews (1991) provided the theoretical framework; [Newey & West (1994)](https://ideas.repec.org/p/att/wimass/9220.html) made it operational with the specific constants `4 · (n/100)^(2/9)`, calibrated to give sensible lag counts across the sample sizes typical in econometrics. The `n/100` term is just a scaling anchor — at n = 100 the formula returns exactly 4, so think of "4 lags at 100 observations" as the calibration point and everything else as a slow extrapolation from there.
 
 The 2/9 exponent is small, so L grows slowly with sample size:
 
@@ -2189,7 +2189,7 @@ Our excess returns show mild day-to-day mean reversion — likely from the way p
 
 #### Why Is This Lower Than the Volatility Risk Premium Literature?
 
-The academic VRP literature (Bakshi-Kapadia 2003, Coval-Shumway 2001, the BXM whitepapers) reports t-statistics in the range of **5–8**. So why does our well-built MSFT backtest produce 0.58?
+The academic VRP literature ([Bakshi-Kapadia 2003](https://academic.oup.com/rfs/article-abstract/16/2/527/1605194), [Coval-Shumway 2001](https://onlinelibrary.wiley.com/doi/10.1111/0022-1082.00352), the [BXM whitepapers](https://www.cboe.com/us/indices/dashboard/BXM/)) reports t-statistics in the range of **5–8**. So why does our well-built MSFT backtest produce 0.58?
 
 The papers test a different null hypothesis. They compare a short-vol portfolio's return to **cash** (the risk-free rate). We compare the overlay's return to **buy-and-hold of the same stock**. Both questions are valid; they isolate different things.
 
@@ -2197,7 +2197,7 @@ When you compare to buy-and-hold, the stock's own return cancels and you're left
 
 Three other compounding factors:
 
-1. **Index VRP > single-stock VRP.** SPX options have structural insurance demand from institutional hedgers that single names lack. Israelov & Nielsen (2015) found single-stock CC strategies underperform index CCs on a risk-adjusted basis.
+1. **Index VRP > single-stock VRP.** SPX options have structural insurance demand from institutional hedgers that single names lack. [Israelov & Nielsen (2015)](https://rpc.cfainstitute.org/research/financial-analysts-journal/2015/covered-calls-uncovered) found single-stock CC strategies underperform index CCs on a risk-adjusted basis.
 2. **Covered calls capture only one side.** The richest part of the equity vol surface is *put* premium (skew). Our overlay sells only OTM calls — roughly 30–40% of the full one-leg VRP.
 3. **Modeled IV vs. market IV.** Our backtest derives premiums from `HV × multiplier`, which is an *assumed* VRP, not a *measured* one. The academic numbers come from real market option prices spanning decades.
 
@@ -2477,6 +2477,10 @@ Academic papers cited or built on in this tutorial. URLs link to the publishers'
 ### Option pricing
 
 - Black, F. & Scholes, M. (1973). "The Pricing of Options and Corporate Liabilities." *Journal of Political Economy*, 81(3), 637–654. ([JSTOR](https://www.jstor.org/stable/1831029))
+
+### Numerical methods
+
+- Abramowitz, M. & Stegun, I. A. (eds.) (1964). *Handbook of Mathematical Functions with Formulas, Graphs, and Mathematical Tables*. National Bureau of Standards. Source of the polynomial CDF approximation (Formula 26.2.17) used in the educational version of `normal_cdf`. ([Wikipedia](https://en.wikipedia.org/wiki/Abramowitz_and_Stegun))
 
 ### Volatility risk premium
 
