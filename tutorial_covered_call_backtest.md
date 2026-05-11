@@ -2208,7 +2208,7 @@ So with more data, the SE shrinks — but only as the *square root* of `n`. **To
 
 After 2,513 days of averaging, the wobble of our sample-mean *estimate* has shrunk from 62 bps to about 1.2 bps — roughly 50× more precise than a single day's observation. The √n machinery did exactly what it was supposed to do.
 
-**The t-stat is just "how many SEs is the mean away from zero?"**
+**The t-stat is just "how many SEs is the mean away from zero?":**
 
 - Sample mean (the edge): 0.6 bps/day
 - SE: 1.2 bps
