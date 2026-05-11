@@ -1,4 +1,5 @@
 numpy
+matplotlib
 yfinance
 pytest
 pytest-cov

@@ -29,6 +29,7 @@
 
 Before diving in, here are a few terms you'll see throughout this tutorial:
 
+- **AR(1) (autoregressive, order 1):** The simplest model of a time series that has memory. Each value depends linearly on the previous one plus a fresh random shock: `y_t = φ · y_{t-1} + ε_t`. The single coefficient `φ` (phi) controls how much: `φ = 0` is white noise (no memory — IID coin flips), `φ > 0` is positive autocorrelation (today inherits from yesterday — momentum), `φ < 0` is mean reversion (today fades yesterday). AR(1) is the standard testbed for time-series methods because its long-run variance has a clean closed form (`1 / (1 − φ)²` for unit-variance innovations), so you can measure how well an estimator like Newey-West tracks the truth. Figure 3 in Part 5 uses 2,000 AR(1) paths with `φ = 0.3` to demonstrate the bias-variance tradeoff for the NW lag cutoff.
 - **Assignment loss:** What happens when your covered call gets exercised because the stock rallied past the strike. You collected premium up front, but to keep running the overlay you must rebuy the shares at the current (higher) market price. The overlay's net is `premium − (market_price − strike)`. It's a **loss** when the stock rallied past `strike + premium`. Example: you sold a $310 strike call for $1.50 premium and the stock closed at $325 — you keep the $1.50 but pay back $15 of capped upside, netting **−$13.50/share**. The stock appreciation up to the strike is still yours (tracked separately as part of equity), but the *uncapped* portion of the rally is gone. In a strong bull market this is the dominant cost the overlay pays.
 - **CC (Covered Call):** A strategy where you own 100 shares of a stock and sell a call option against them. You collect the premium up front; if the stock stays below the strike at expiration, you keep the shares and the premium. If it rises above the strike, your shares may be called away at that price. "Covered" means you already own the shares, so you're not exposed to unlimited upside risk like a naked call.
 - **CSP (Cash-Secured Put):** A strategy where you sell a put option and set aside enough cash to buy 100 shares at the strike price if assigned. You collect the premium up front; if the stock stays above the strike, the put expires worthless and you keep the cash. If it falls below, you're obligated to buy the shares at the strike. CSPs are the "entry" half of the wheel — a way to get paid while waiting to buy a stock at a discount.
@@ -42,6 +43,7 @@ Before diving in, here are a few terms you'll see throughout this tutorial:
 - **IID (Independent and Identically Distributed):** Two assumptions baked into most introductory statistics formulas. *Independent* means each observation tells you nothing about any others (like fair coin flips). *Identically distributed* means every observation comes from the same probability distribution (same bag of marbles each draw). Financial returns rarely satisfy either — they cluster in volatility regimes (not identical) and they autocorrelate through position holding (not independent). Naive t-stat formulas assume IID and inflate when it's violated.
 - **IV (Implied Volatility):** What the market thinks future volatility will be, baked into the option price. Since we don't have real IV data, we estimate it using a regime-based multiplier on HV (1.1× in high-vol regimes, 1.3× in normal, 1.5× in low-vol).
 - **Lag:** How many time periods back you look when comparing observations in a time series. "Lag 1" means yesterday's value, "lag 5" means the value from 5 days ago, and so on. The *autocovariance at lag k* measures how much today's observation correlates with the observation `k` periods earlier — at lag 0 this is just the variance (correlation of a value with itself), at lag 1 it's the same-as-yesterday correlation, etc. Newey-West sums weighted autocovariances from lag 0 up to a chosen *lag cutoff* `L`, picked big enough to capture meaningful autocorrelation but small enough to avoid pulling in noisy near-zero terms.
+- **MSE (Mean Squared Error):** The standard way to measure how far an estimator is from the truth on average: `MSE = E[(estimator − true value)²]`. It decomposes cleanly into two pieces — `MSE = bias² + variance` — where the bias² term captures systematic miss (the estimator is centered on the wrong value) and the variance term captures noise (the estimator wobbles a lot across samples). Minimizing MSE means *balancing* those two, sometimes accepting a little bias to reduce a lot of variance, or vice versa. Figure 3 in Part 5 plots both pieces and their sum as a function of the Newey-West lag cutoff `L`; the U-shape comes directly from this tradeoff.
 - **Newey-West HAC (NW):** A correction to standard errors that accounts for autocorrelation and heteroskedasticity in time-series data — both common in financial returns. Often abbreviated **NW** in code and prose. HAC stands for "Heteroskedasticity and Autocorrelation Consistent." *Heteroskedasticity* means the variance changes over time (the stock is calm one week, volatile the next); *autocorrelation* means consecutive observations are correlated (today's value tells you something about tomorrow's). For an overlay strategy, where the same option position drives multiple consecutive days of P&L, naive standard errors are too small (consecutive days aren't independent observations) and naive t-stats are inflated. Newey-West fixes both at once by widening the standard error to reflect the actual independent information in the sample. Lag cutoff in our backtest is `L = floor(4 · (n/100)^(2/9))` — the framework comes from Andrews (1991); the specific operational formula is from Newey & West (1994).
 - **OTM (Out of the Money):** A call option where the strike price is above the current stock price (the buyer wouldn't exercise yet). We sell OTM calls to collect premium while giving the stock room to grow.
 - **PDF (Probability Density Function):** The "height" of the bell curve at a given point. While the CDF measures the area under the curve (a cumulative probability), the PDF measures how tall the curve is at one specific value. We need it inside the CDF approximation formula — the approximation works by multiplying the PDF (height) by a polynomial correction to estimate the CDF (area).
@@ -2100,7 +2102,11 @@ The constants and exponent in that formula solve a real bias-variance tradeoff i
 - **Bias side.** Set L too small and you cut off lags that still have real autocorrelation. Newey-West then *still* underestimates the variance of the mean — you've fixed the IID assumption only partially.
 - **Variance side.** Set L too large and you start including lags where the *true* autocorrelation is essentially zero, but the *sample estimate* is just noise. Each near-zero noisy autocovariance you add jitters the variance estimator from sample to sample, so your standard error becomes unreliable in a different way.
 
-The optimum sits where the marginal reduction in bias equals the marginal increase in variance. For the Bartlett kernel weights `w_k = 1 − k/(L+1)`, that optimum scales as `n^(2/9)`. Andrews (1991) provided the theoretical framework; [Newey & West (1994)](https://ideas.repec.org/p/att/wimass/9220.html) made it operational with the specific constants `4 · (n/100)^(2/9)`, calibrated to give sensible lag counts across the sample sizes typical in econometrics. The `n/100` term is just a scaling anchor — at n = 100 the formula returns exactly 4, so think of "4 lags at 100 observations" as the calibration point and everything else as a slow extrapolation from there.
+The optimum sits where the marginal reduction in bias equals the marginal increase in variance — equivalently, where the estimator's **mean squared error** (`MSE = bias² + variance`) is minimized. For the Bartlett kernel weights `w_k = 1 − k/(L+1)`, that optimum scales as `n^(2/9)`. Andrews (1991) provided the theoretical framework; [Newey & West (1994)](https://ideas.repec.org/p/att/wimass/9220.html) made it operational with the specific constants `4 · (n/100)^(2/9)`, calibrated to give sensible lag counts across the sample sizes typical in econometrics. The `n/100` term is just a scaling anchor — at n = 100 the formula returns exactly 4, so think of "4 lags at 100 observations" as the calibration point and everything else as a slow extrapolation from there.
+
+![Three curves plotted against the lag cutoff L from 0 to 30. The bias-squared curve starts at 1.0 and decays toward zero by about L equals 10. The variance curve starts at zero and rises monotonically. Their sum, the mean squared error, is U-shaped, reaching a minimum around L equals 8 to 10. A vertical green line at L equals 8 marks the value the Andrews and Newey-West formula chooses for our sample size of 2,500.](docs/figures/03_bias_variance.png)
+
+*Bias-variance decomposition of the Newey-West variance-of-the-mean estimator. Simulated from 2,000 AR(1) paths — a "today depends on yesterday plus noise" time series with `φ = 0.3` autocorrelation (see Glossary) — each of length n=2,500. Small L misses real autocorrelation (high bias, dashed blue); large L pulls in noisy near-zero autocovariances (high variance, dotted orange). The black MSE curve's U-shape is shallow but real, and the Andrews/Newey-West choice of L=8 lands essentially at the bottom — exactly the sweet spot the formula was designed to find.*
 
 The 2/9 exponent is small, so L grows slowly with sample size:
 
@@ -2116,7 +2122,7 @@ Doubling your sample only buys you ~17% more lags (`2^(2/9) ≈ 1.17`). The form
 
 The intuition transfers nicely. If your data has long memory (momentum factors, volatility clusters, slowly mean-reverting overlay P&L), the formula picks up enough lags to handle it. If the data is nearly IID, the few-lag NW correction barely changes the standard error from the naive version. Either way, it auto-adapts — you don't have to tune the bandwidth by hand for each dataset.
 
-This is the statistic to actually report.
+**Bottom line: report the Newey-West t-stat, not the naive one.** On near-IID data NW reduces to nearly the naive value at no cost; on the autocorrelated data you actually have, the naive formula quietly inflates the t-stat by 30–100%. There's no scenario where the naive version is the safer call.
 
 #### The Code
 
@@ -2177,7 +2183,48 @@ Clears t=3 bar (HLZ 2016)?          False
 
 The +$299K headline P&L is real money in dollar terms, but **it's not statistically distinguishable from buy-and-hold noise**. With a Sharpe of 0.163 and 10 years of data, we'd need ~150 years of comparable data to clear the t = 2 bar at this effect size.
 
-There's a useful shortcut buried in the math: **t-stat ≈ Sharpe × √(years)**. You can sanity-check the relationship in one line: 0.163 × √10 ≈ 0.52, almost exactly what `compute_statistics` returns. If your Sharpe and your sample length don't multiply to a healthy t-stat, no amount of fiddling with the strategy will rescue it — you need a bigger effect or more data.
+![Histogram of daily excess returns across 2,514 trading days. The distribution is roughly bell-shaped and centered near zero, with most days falling between minus 200 and plus 200 basis points. A red vertical line marks the sample mean at +0.6 basis points per day, sitting just to the right of zero and well within the bulk of the distribution.](docs/figures/02_excess_histogram.png)
+
+*Daily excess returns from the bundled MSFT backtest. The mean (red line) is +0.6 bps/day, annualizing to +1.59%. The daily standard deviation around that mean is 62 bps — about 100× larger. That noise-to-signal ratio is why the t-statistic is small.*
+
+**Two standard deviations, not one.** The formula `t = mean / (std / √n)` quietly does more work than it looks like. It's the bridge between **two different standard deviations**, and conflating them is how people misread their own backtests.
+
+**σ — the standard deviation of the data itself.** How much do individual daily returns vary day-to-day? In our case, **62 bps/day**. Some days are +200 bps, some are −150 bps, most are within ±60 bps. That's the volatility of the underlying observations.
+
+**SE — the standard deviation of the *estimate* of the mean.** Imagine running this same 10-year backtest in a parallel universe with the same underlying market dynamics but different specific outcomes. The sample mean from each universe would differ slightly. How much it would differ is the *standard error of the mean*. It's much smaller than σ once you have many observations.
+
+When you average independent observations, random ups and downs partially cancel — some are above the true mean, some below — and they average toward the truth. Mathematically:
+
+$$\text{SE} = \frac{\sigma}{\sqrt{n}}$$
+
+So with more data, the SE shrinks — but only as the *square root* of `n`. **To halve your SE you need 4× the data. To shrink it 10× you need 100× the data.** This is the iron law of statistical convergence, and it's what makes large samples expensive to obtain.
+
+**Plugging in our numbers:**
+
+- σ (daily noise) = 62 bps/day
+- n = 2,513 trading days
+- √n ≈ 50.1
+- SE = 62 / 50.1 ≈ **1.2 bps**
+
+After 2,513 days of averaging, the wobble of our sample-mean *estimate* has shrunk from 62 bps to about 1.2 bps — roughly 50× more precise than a single day's observation. The √n machinery did exactly what it was supposed to do.
+
+**The t-stat is just "how many SEs is the mean away from zero?"**
+
+- Sample mean (the edge): 0.6 bps/day
+- SE: 1.2 bps
+- Ratio: 0.6 / 1.2 ≈ **0.5**
+
+That ratio *is* the t-statistic. A mean half an SE from zero is comfortably inside the noise of estimation — exactly what you'd see if the true mean were actually zero and our sample just happened to land slightly above it. To declare the mean "significantly different from zero" we'd need t ≥ 2 (about 2 SEs out).
+
+**The dartboard picture.** A dart-thrower aiming at some target throws 2,513 darts. Individual darts land all over the place with spread σ = 62 bps. You take the average position of all the darts; that average wobbles around the true aim with spread SE ≈ 1.2 bps. You compute the average and find it 0.6 bps to the right of zero. Is the thrower aiming right of zero — or aiming at zero and the dart-average just happens to be slightly off? With a 1.2-bps wobble in your estimate and only 0.6 bps off-center, you can't tell. The honest verdict: "could be either."
+
+**The misconception this clarifies.** People often see the 62 bps daily noise and conclude "the noise is so large, the t-stat is small." That's only half the story. The 62-bps daily noise got averaged down by √2,513 to a 1.2-bps SE on the *mean* — the √n machinery worked. **The reason the t-stat is small isn't that the daily noise is large in absolute terms; it's that the daily edge (0.6 bps) is even smaller than what 10 years of averaging can resolve.** That's why "just run a longer backtest" doesn't help much. To halve the SE from 1.2 to 0.6 bps (matching the signal exactly, getting t ≈ 1), you'd need 4× the data — 40 years. For t = 2, 16× the data — 160 years. The arithmetic is brutal because of the square root.
+
+**The shortcut.** There's a useful shortcut buried in the math: **t-stat ≈ Sharpe × √(years)**. You can sanity-check the relationship in one line: 0.163 × √10 ≈ 0.52, almost exactly what `compute_statistics` returns. If your Sharpe and your sample length don't multiply to a healthy t-stat, no amount of fiddling with the strategy will rescue it — you need a bigger effect or more data.
+
+![Line chart on a logarithmic x-axis showing the expected t-statistic as a function of years of data, given a Sharpe ratio of 0.163. The curve rises from about 0.16 at one year through 0.52 at ten years, crosses the conventional significance threshold of 2 at roughly 151 years, and crosses the Harvey-Liu-Zhu threshold of 3 at roughly 339 years. A dot at ten years marks the actual MSFT sample.](docs/figures/04_t_stat_vs_years.png)
+
+*The shortcut, visualized. At this strategy's Sharpe, each additional decade of data buys roughly half a t-stat point. Clearing the conventional t=2 bar would take around 150 years; the HLZ bar of 3 would take around 340. The path to a confident conclusion on this setup isn't "run a longer backtest" — it's "find a strategy with a bigger Sharpe" (index VRP, delta-hedged short calls, multi-asset diversification).*
 
 #### Why Naive Is *Smaller* Than Newey-West Here
 
@@ -2294,6 +2341,10 @@ Here's the complete process:
 - Newey-West t-stat < 2 even though dollar P&L looks positive (the apparent edge is noise)
 
 **Our strategy:**
+
+![Overlay vs. buy-and-hold equity curves on MSFT 2016–2026, showing the overlay ending at approximately $1,045K and buy-and-hold ending at approximately $746K. Both curves grow substantially; the overlay's lead is small early on and widens noticeably from 2019 onward, ending with a $299K gap.](docs/figures/01_equity_curves.png)
+
+*Overlay vs. buy-and-hold equity on the bundled MSFT data. The overlay finishes about $299K ahead. The gap is small through 2018, then widens through the 2019–2024 stretch and stays near $200–300K through the recent vol-heavy period — accumulating in the volatile middle years rather than in any single regime.*
 
 - ✅ Fixed params: ~1,047% total return (stock + overlay, measured against initial stock cost)
 - ✅ Monte Carlo: high percentile (real return beats randomized paths)
