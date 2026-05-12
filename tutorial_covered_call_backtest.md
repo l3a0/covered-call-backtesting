@@ -39,7 +39,7 @@ Before diving in, here are a few terms you'll see throughout this tutorial:
 - **Drawdown:** The decline from a recent peak to a subsequent trough. *Max drawdown* is the worst peak-to-trough loss in the sample — a common measure of downside risk. A strategy returning 20% annualized with 5% max drawdown is safer than one returning 25% with 40% max drawdown, even though the first has lower expected return.
 - **DTE (Days to Expiration):** How many calendar days until the option expires. We use 21 DTE (about 3 weeks) as our default.
 - **Excess Return:** The strategy's return *minus* the benchmark's return on the same day. For a covered call overlay, the relevant excess return is the overlay's daily return minus buy-and-hold's daily return on the same shares. Subtracting the benchmark cancels out the stock's own movement, leaving only the value the overlay adds (or destroys). When testing whether a strategy "works," you almost always want to test excess returns, not raw returns — otherwise you're mostly measuring the underlying market.
-- **Gamma risk:** The risk that your option's delta changes rapidly as the stock moves. Near expiration, small stock moves can cause big swings in an option's value — a "safe" out-of-the-money call can suddenly become in-the-money. This is why we close positions before the last week of expiration.
+- **Gamma risk:** The risk that your option's delta changes rapidly as the stock moves. Near expiration, small stock moves can cause big swings in an option's value — a "safe" out-of-the-money call can suddenly become in-the-money. The conventional fix is to close positions before the last week of expiration (the "7-DTE close" rule). The current engine handles this indirectly through its `delta > 0.70` close trigger, which tends to fire more readily near expiration as gamma steepens; an explicit DTE-based threshold is listed in "What We'd Add Next" in Part 6.
 - **HV (Historical Volatility):** How much the stock price has actually been bouncing around, measured from past prices.
 - **IID (Independent and Identically Distributed):** Two assumptions baked into most introductory statistics formulas. *Independent* means each observation tells you nothing about any others (like fair coin flips). *Identically distributed* means every observation comes from the same probability distribution (same bag of marbles each draw). Financial returns rarely satisfy either — they cluster in volatility regimes (not identical) and they autocorrelate through position holding (not independent). Naive t-stat formulas assume IID and inflate when it's violated.
 - **ITM (In the Money):** The opposite of OTM. A call option is ITM when the strike is *below* the current stock price (the buyer would exercise immediately to capture the difference); a put is ITM when the strike is *above* the current stock price. As a covered-call seller you *don't* want your short calls to end up ITM at expiration — that's the assignment loss scenario, where you lose all the upside above the strike. An option's delta is roughly the probability it expires ITM.
@@ -535,7 +535,14 @@ def rolling_volatility(prices, window=30):
     # Dividing by N-1 corrects for this bias and gives an unbiased estimate
     # of the true variance. For N=30 the correction is small (~3% larger
     # std dev) but it's the statistically correct choice.
-    rolling_std = pd.Series(log_returns).rolling(window).std(ddof=1)
+    # Compute rolling std with a sliding window; this mirrors what the
+    # real `calc_rolling_volatility` in cc_backtest.py does, using only
+    # numpy (no pandas import needed for a simple sliding window).
+    rolling_std = np.array([
+        np.std(log_returns[i - window + 1 : i + 1], ddof=1)
+        if i >= window - 1 else np.nan
+        for i in range(len(log_returns))
+    ])
     
     # Annualize (multiply by sqrt(252) for daily data)
     annualized_vol = rolling_std * np.sqrt(252)
@@ -678,16 +685,16 @@ IDLE (no open call)
 [Sell call at 0.25Δ]
   ↓
 OPEN (call is active)
+  ├─ [Expiration reached: days_left ≤ 0?] → YES → settle (assigned if price ≥ strike, else expires worthless)
   ├─ [Check profit target: 75% of premium captured?] → YES → close and RESET
-  ├─ [Check expiration: < 7 days?] → YES → close and RESET
-  ├─ [Check ITM assignment risk: delta > 0.70?] → YES → evaluate close or roll
+  ├─ [Check ITM assignment risk: delta > 0.70?] → YES → close and RESET
   └─ [Hold and check again tomorrow]
   ↓
 RESET (sold and closed; ready for next call)
   └─ [Wait 1 day, then go back to IDLE]
 ```
 
-In code:
+Sketched as a per-day handler (the real `run_cc_overlay` inlines this loop body — `run_cc_overlay_day` is illustrative, not a function in the codebase):
 
 ```python
 def run_cc_overlay_day(
@@ -1325,7 +1332,7 @@ def run_cc_overlay(dates, prices, params):
 **Principle:** Treat covered calls like an **income strategy**, not a market-timing strategy. You sold insurance at a price you thought was fair. Let the contract play out unless:
 
 1. You hit your profit target (75% of premium captured), or
-2. Expiration is very close (< 7 days) and you want to reset for another month
+2. The call has gone deep ITM (delta > 0.70) and assignment is now very likely — close to free up capital before gamma compounds the damage
 
 ---
 
@@ -1625,9 +1632,9 @@ After running walk-forward on 2016–2026 MSFT data, the optimizer consistently 
    - Captures most of the time decay without waiting until the very end
    - Frees up capital to sell the next call sooner
 
-4. **7 DTE close** prevents whipsaws:
-   - Last week of expiration is chaotic (gamma risk, pin risk)
-   - Better to lock in profit and reset
+4. **Deep-ITM close at delta > 0.70** caps assignment damage:
+   - When the call goes deep ITM, gamma is steep and a small adverse move can wipe out months of premium income
+   - Closing early at the 0.70-delta threshold gives up the last sliver of time value to escape before assignment crystallizes the full upside loss
 
 5. **No trend filter** is surprising:
    - In the CC phase, selling calls in a downtrend is actually *desirable* — it reduces your cost basis and generates income while you wait for recovery
@@ -1638,7 +1645,7 @@ After running walk-forward on 2016–2026 MSFT data, the optimizer consistently 
 
 **Result:**
 
-- **Fixed params (0.25Δ, 21 DTE, 75% close, no filter) on all 10 years:** ~1,047% total return (measured against initial stock cost of 100 shares)
+- **Fixed params (0.25Δ, 21 DTE, 75% close, no filter) on all 10 years:** ~945% total return on the bundled `$100K capital` configuration (final equity ~$1,045K — see Figure 1 in Part 6).
 - **Walk-forward (params optimized per period) on out-of-sample:** typically outperforms fixed params by 10–15%
 
 > **Note on return measurement:** Returns are measured against the cost basis of 100 shares (1 contract), not against a separate cash reserve. This is the natural denominator for a covered call overlay — the return on the stock position including premium income.
@@ -1776,7 +1783,7 @@ def monte_carlo_shuffle(dates, prices, params, num_shuffles=1000):
         # Percentile: what % of random shuffles did our real strategy beat?
         #
         # Step 1: count how many MC returns are worse than our real return.
-        #   e.g., real_return=1047, mc_returns=[800, 900, 1100, 700, 850]
+        #   e.g., real_return=945, mc_returns=[800, 900, 1100, 700, 850]
         #   worse = 4 (we beat 800, 900, 700, 850 — all except 1100)
         #
         # Step 2: convert to a percentile.
@@ -1803,12 +1810,12 @@ def monte_carlo_shuffle(dates, prices, params, num_shuffles=1000):
     }
 ```
 
-**Our result (example from walk-forward best params):**
+**Our result (`__main__` params on the bundled MSFT data, 500 shuffles, seed=42):**
 
-- Real return: ~1,047%
-- MC mean: ~800% (average across 500 shuffled paths)
-- MC percentile: 87 (our strategy beat 87% of random shuffles)
-- This means: only 13% of random price orderings produced a better return than our strategy did on the real price path.
+- Real return: ~945%
+- MC mean: ~654% (average across 500 shuffled paths)
+- MC percentile: 100 (our strategy beat 100% of random shuffles — the real return is higher than every single shuffled path's, with the shuffle max at ~934%)
+- This means: 0% of random price orderings produced a better return than our strategy did on the real price path.
 
 **Interpretation:** The strategy beats randomized price paths — it exploits real price patterns, not just luck. A percentile above 80 indicates genuine skill.
 
@@ -1884,37 +1891,41 @@ for param, variations in results.items():
     print(f"  Swing: {swing}% ({'sensitive' if swing > 50 else 'robust'})")
 ```
 
-**Example output:**
+**Example output** (`__main__` params on the bundled MSFT data, run against the current engine):
 
 ```text
 call_delta sensitivity:
-  -0.10: 870%   -0.05: 950%   base: 1047%   +0.05: 1020%   +0.10: 890%
-  Swing: 177% (sensitive)
+  -0.10: 882%   -0.05: 861%   base: 945%   +0.05: 925%   +0.10: 899%
+  Swing: 84 pp (max−min) ≈ 9% of base; worst drop from base is 84 pp.
 
 close_at_pct sensitivity:
-  -0.20: 1055%   -0.10: 1050%   base: 1047%   +0.10: 1040%   +0.20: 1035%
-  Swing: 20% (robust)
-  
-Strategy is ROBUST: results don't change much when you tweak parameters.
+  -0.20: 882%   -0.10: 984%   base: 945%   +0.10: 965%   +0.20: 895%
+  Swing: 102 pp (max−min) ≈ 11% of base; worst drop from base is 63 pp ≈ 7%.
 
-Math behind the "~2% drop" claim for close_at_pct:
-  base = 1047%, worst variant = 1035% (at +0.20 offset)
-  Drop = 1047 - 1035 = 12 percentage points
-  Relative drop = 12 / 1047 = 1.1% of base return
-  → Changing close_at_pct by 20% only costs ~1% of your return.
+Strategy is ROBUST: both params produce single-digit-percent drops under
+realistic perturbations. Worth noting: the base config isn't always the
+optimum — close_at_pct=0.65 outperforms the default 0.75 by ~39 pp here,
+hinting at a small in-sample optimization opportunity (which walk-forward
+in Part 4 lets you exploit honestly without overfitting).
 
-Compare to call_delta:
-  base = 1047%, worst variant = 870% (at -0.10 offset)
-  Drop = 1047 - 870 = 177 percentage points
-  Relative drop = 177 / 1047 = 16.9% of base return
-  → Changing call_delta by 0.10 costs ~17% of your return — much more fragile.
+Math behind the call_delta sensitivity:
+  base = 945%, worst variant = 861% (at -0.05 offset, i.e., 0.20Δ)
+  Drop = 945 − 861 = 84 percentage points
+  Relative drop = 84 / 945 = 8.9% of base return
+  → Changing call_delta by 0.05 (from 0.25 to 0.20) costs ~9% of return.
+
+Math behind the close_at_pct sensitivity:
+  base = 945%, worst variant = 882% (at -0.20 offset, i.e., 0.55)
+  Drop = 945 − 882 = 63 percentage points
+  Relative drop = 63 / 945 = 6.7% of base return
+  → Changing close_at_pct by 0.20 (from 0.75 to 0.55) costs ~7% of return.
 ```
 
-**Our result:** ~20-point spread across close_at_pct combos (1035–1055%). Very stable.
+**Our result:** ~102-point spread across close_at_pct combos (882–984%). Single-digit-percent relative variation — well inside "robust" territory.
 
-- Spread = max − min = 1055% − 1035% = 20 percentage points
-- Relative spread = 20 / 1045 (midpoint) = 1.9% variation
-- Compare: if the spread were 800–1200%, that's 400pp / 40% variation — a sign of overfitting.
+- Spread = max − min = 984% − 882% = 102 percentage points
+- Relative spread = 102 / 933 (midpoint) = 10.9% variation
+- Compare: if the spread were 400+ pp / 40%+ variation, that'd be a sign of overfitting; we're well below.
 
 ### Regime Analysis: Does It Work in Bulls, Bears, and Sideways?
 
@@ -2207,11 +2218,11 @@ So with more data, the SE shrinks — but only as the *square root* of `n`. **To
 **Plugging in our numbers:**
 
 - σ (daily noise) = 62 bps/day
-- n = 2,513 trading days
+- n = 2,514 trading days
 - √n ≈ 50.1
 - SE = 62 / 50.1 ≈ **1.2 bps**
 
-After 2,513 days of averaging, the wobble of our sample-mean *estimate* has shrunk from 62 bps to about 1.2 bps — roughly 50× more precise than a single day's observation. The √n machinery did exactly what it was supposed to do.
+After 2,514 days of averaging, the wobble of our sample-mean *estimate* has shrunk from 62 bps to about 1.2 bps — roughly 50× more precise than a single day's observation. The √n machinery did exactly what it was supposed to do.
 
 **The t-stat is just "how many SEs is the mean away from zero?":**
 
@@ -2221,11 +2232,11 @@ After 2,513 days of averaging, the wobble of our sample-mean *estimate* has shru
 
 That ratio *is* the t-statistic. A mean half an SE from zero is comfortably inside the noise of estimation — exactly what you'd see if the true mean were actually zero and our sample just happened to land slightly above it. To declare the mean "significantly different from zero" we'd need t ≥ 2 (about 2 SEs out).
 
-**The dartboard picture.** A dart-thrower aiming at some target throws 2,513 darts. Individual darts land all over the place with spread σ = 62 bps. You take the average position of all the darts; that average wobbles around the true aim with spread SE ≈ 1.2 bps. You compute the average and find it 0.6 bps to the right of zero. Is the thrower aiming right of zero — or aiming at zero and the dart-average just happens to be slightly off? With a 1.2-bps wobble in your estimate and only 0.6 bps off-center, you can't tell. The honest verdict: "could be either."
+**The dartboard picture.** A dart-thrower aiming at some target throws 2,514 darts. Individual darts land all over the place with spread σ = 62 bps. You take the average position of all the darts; that average wobbles around the true aim with spread SE ≈ 1.2 bps. You compute the average and find it 0.6 bps to the right of zero. Is the thrower aiming right of zero — or aiming at zero and the dart-average just happens to be slightly off? With a 1.2-bps wobble in your estimate and only 0.6 bps off-center, you can't tell. The honest verdict: "could be either."
 
-**The misconception this clarifies.** People often see the 62 bps daily noise and conclude "the noise is so large, the t-stat is small." That's only half the story. The 62-bps daily noise got averaged down by √2,513 to a 1.2-bps SE on the *mean* — the √n machinery worked. **The reason the t-stat is small isn't that the daily noise is large in absolute terms; it's that the daily edge (0.6 bps) is even smaller than what 10 years of averaging can resolve.** That's why "just run a longer backtest" doesn't help much. To halve the SE from 1.2 to 0.6 bps (matching the signal exactly, getting t ≈ 1), you'd need 4× the data — 40 years. For t = 2, 16× the data — 160 years. The arithmetic is brutal because of the square root.
+**The misconception this clarifies.** People often see the 62 bps daily noise and conclude "the noise is so large, the t-stat is small." That's only half the story. The 62-bps daily noise got averaged down by √2,514 to a 1.2-bps SE on the *mean* — the √n machinery worked. **The reason the t-stat is small isn't that the daily noise is large in absolute terms; it's that the daily edge (0.6 bps) is even smaller than what 10 years of averaging can resolve.** That's why "just run a longer backtest" doesn't help much. To halve the SE from 1.2 to 0.6 bps (matching the signal exactly, getting t ≈ 1), you'd need 4× the data — 40 years. For t = 2, ~15× the data — ~150 years (the exact figure is `(2/0.163)² × 10 ≈ 151`). The arithmetic is brutal because of the square root.
 
-**The shortcut.** There's a useful shortcut buried in the math: **t-stat ≈ Sharpe × √(years)**. You can sanity-check the relationship in one line: 0.163 × √10 ≈ 0.52, almost exactly what `compute_statistics` returns. If your Sharpe and your sample length don't multiply to a healthy t-stat, no amount of fiddling with the strategy will rescue it — you need a bigger effect or more data.
+**The shortcut.** There's a useful shortcut buried in the math: **t-stat ≈ Sharpe × √(years)**. You can sanity-check the relationship in one line: 0.163 × √10 ≈ 0.52, almost exactly the naive t-stat of 0.51 that `compute_statistics` returns. (The Newey-West-adjusted t-stat of 0.58 includes the autocorrelation correction from earlier in this section, which the shortcut doesn't model.) If your Sharpe and your sample length don't multiply to a healthy t-stat, no amount of fiddling with the strategy will rescue it — you need a bigger effect or more data.
 
 ![Line chart on a logarithmic x-axis showing the expected t-statistic as a function of years of data, given a Sharpe ratio of 0.163. The curve rises from about 0.16 at one year through 0.52 at ten years, crosses the conventional significance threshold of 2 at roughly 151 years, and crosses the Harvey-Liu-Zhu threshold of 3 at roughly 339 years. A dot at ten years marks the actual MSFT sample.](docs/figures/04_t_stat_vs_years.png)
 
@@ -2274,7 +2285,7 @@ Monte Carlo, sensitivity analysis, and regime testing (above) are the robustness
 | **Newey-West t-stat** (above) | Excess returns indistinguishable from zero | Compute the t-statistic of daily excess returns (overlay minus benchmark) using Newey-West standard errors that correct for the autocorrelation introduced by holding the same option position across multiple days. Conventional bar `\|t\| > 2`; stricter HLZ bar `\|t\| > 3`. Pairs naturally with Deflated Sharpe: t-stat tests whether the strategy's edge survives the *autocorrelation* of its own returns; deflated Sharpe tests whether it survives *multiple-testing bias* across the parameter grid. |
 | **Multi-asset testing** | Stock-specific luck | Run the same strategy on MSFT, AAPL, SPY, QQQ, etc. A strategy that works across many tickers is capturing a real market dynamic, not a quirk of one stock. |
 | **Regime analysis** (above) | Fair-weather strategies | Verify the strategy works in bull, bear, and sideways markets — not just the regime you happened to backtest on. |
-| **Final holdout set** | All-of-the-above leakage | Reserve the last 1–2 years of data and *never touch it* until you're completely done designing and tuning. One shot, no do-overs. **How is this different from walk-forward's test set?** Walk-forward prevents the *code* from peeking at future data, but *you* still see the walk-forward results and make decisions based on them (e.g., "1,047% looks good, let's keep this approach"). That's information leakage through the human. The holdout prevents that second layer — data you literally never look at during the entire design process. No tuning, no validation, no "let me just check." After you've finalized everything, you run it once on the holdout. That result is your most honest estimate of real-world performance. |
+| **Final holdout set** | All-of-the-above leakage | Reserve the last 1–2 years of data and *never touch it* until you're completely done designing and tuning. One shot, no do-overs. **How is this different from walk-forward's test set?** Walk-forward prevents the *code* from peeking at future data, but *you* still see the walk-forward results and make decisions based on them (e.g., "945% looks good, let's keep this approach"). That's information leakage through the human. The holdout prevents that second layer — data you literally never look at during the entire design process. No tuning, no validation, no "let me just check." After you've finalized everything, you run it once on the holdout. That result is your most honest estimate of real-world performance. |
 | **Paper trading** | Everything historical testing can't | Run the strategy live with fake money for 3–6 months. No amount of historical testing substitutes for this. |
 
 **The key insight:** No single check is enough. The more layers that agree your strategy works, the more confident you can be that you've found something real rather than a pattern in noise. Our backtest uses six of these layers (walk-forward, parameter stability, Monte Carlo, regime analysis, sensitivity, and the Newey-West t-stat on excess returns). Adding multi-asset testing and paper trading is the next step before risking real money.
@@ -2351,11 +2362,10 @@ Here's the complete process:
 
 *Overlay vs. buy-and-hold equity on the bundled MSFT data. The overlay finishes about $299K ahead. The gap is small through 2018, then widens through the 2019–2024 stretch and stays near $200–300K through the recent vol-heavy period — accumulating in the volatile middle years rather than in any single regime.*
 
-- ✅ Fixed params: ~1,047% total return (stock + overlay, measured against initial stock cost)
+- ✅ Fixed params: ~945% total return on the bundled `$100K` configuration (final equity ~$1,045K; see Figure 1)
 - ✅ Monte Carlo: high percentile (real return beats randomized paths)
-- ✅ Sensitivity: 1035–1055% range for close_at_pct (stable across params)
+- ✅ Sensitivity: small spread across `close_at_pct` settings (parameter is robust)
 - ✅ All regimes: bull, bear, sideways all profitable
-- ✅ Sharpe ratio: ~0.89–0.90 (reasonable; risk-adjusted returns positive)
 - ⚠️ **Newey-West t-stat on excess returns: 0.58** (overlay's *excess* over buy-and-hold is not statistically distinguishable from zero on this single-stock 10-year sample; see Part 5). The dollar P&L is real, but the evidence for "the overlay specifically is adding value beyond holding MSFT" doesn't clear the statistical bar. This is what the literature on single-stock CC underperformance vs. index CC predicts.
 
 ### The Limitations We Haven't Solved
@@ -2380,6 +2390,7 @@ Here's the complete process:
 7. **Strategy-vs-cash significance test:** Add a second mode to `compute_statistics` that benchmarks the CC strategy's *total* return against the risk-free rate (not against buy-and-hold). This is the comparison the academic VRP literature reports, and it's the right way to put our backtest on equal footing with published BXM/PUT t-stats
 8. **Index ETF test:** Run the same strategy on SPY or QQQ. Single-stock VRP is structurally weaker than index VRP because index options have richer insurance demand. If the t-stat moves substantially toward the academic range when we switch underlyings, that confirms the gap was about *what* we backtested, not *how* we backtested
 9. **Risk-managed (delta-hedged) covered call mode:** Add a `delta_hedge` flag to `params` that, when enabled, buys or sells underlying shares each day to keep the portfolio's net delta pinned at `base_shares` — regardless of where the short call's delta sits. *Delta-hedging* is the practice of continuously trading the underlying to neutralize an option's directional exposure. Conceptual basis in the callout below. Costs ~25–30% more capital (you're holding extra shares to offset the call's negative delta) but produces a meaningfully cleaner test of whether the volatility risk premium is actually being captured
+10. **7-DTE close rule:** Close any open position when fewer than 7 days remain to expiration, regardless of profit target or delta. The current engine triggers on expiration itself, profit-target, or deep ITM (`delta > 0.70`) — so a position that drifts into the gamma-heavy final week without hitting either still has to ride through it. Adding a `min_dte_to_close` parameter (e.g., default 7) is the conventional fix and matches the *Gamma risk* warning in the glossary. Effect on results is probably small on bullish underlyings like MSFT (the delta-0.70 trigger already catches most of these positions early) but would be more visible on volatile or sideways tickers where positions can sit near-ATM into the final week without becoming deep ITM
 
 > **Lessons from Israelov & Nielsen (2015), "Covered Calls Uncovered"** ([CFA Institute](https://rpc.cfainstitute.org/research/financial-analysts-journal/2015/covered-calls-uncovered))
 >
@@ -2425,8 +2436,9 @@ Here's the complete process:
 ```text
 Is there an open position?
   ├─ YES:
+  │    ├─ Has the position reached expiration? → SETTLE (assigned if ITM, else expires worthless)
   │    ├─ Has 75% of premium been captured? → BUY BACK (close)
-  │    ├─ Are we < 7 days to expiration? → BUY BACK (reset)
+  │    ├─ Has the call gone deep ITM (delta > 0.70)? → BUY BACK (avoid assignment)
   │    └─ Otherwise → HOLD
   │
   └─ NO:
