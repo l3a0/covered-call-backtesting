@@ -1219,90 +1219,20 @@ Math behind the close_at_pct sensitivity:
 
 ### Regime Analysis: Does It Work in Bulls, Bears, and Sideways?
 
-**Idea:** Classify years as bull, bear, or sideways, then measure returns in each regime.
+**Idea:** Classify each day as bull, bear, or sideways, then bucket the overlay's trade P&L by regime. If most of the income comes from one regime, the strategy isn't actually market-neutral.
 
-```python
-def classify_regime(prices, window=200):
-    """
-    Classify market regime based on SMA200 slope.
-    
-    Returns:
-        regime: 'bull', 'bear', or 'sideways'
-    """
-    
-    if len(prices) < window:
-        return 'unknown'
-    
-    sma_200 = np.mean(prices[-window:])
-    recent_price = prices[-1]
-    
-    if recent_price > sma_200 * 1.05:
-        return 'bull'
-    elif recent_price < sma_200 * 0.95:
-        return 'bear'
-    else:
-        return 'sideways'
+The implementations are [`cc_backtest.py::classify_regime`](https://github.com/l3a0/covered-call-backtesting/blob/main/cc_backtest.py) and [`::regime_analysis`](https://github.com/l3a0/covered-call-backtesting/blob/main/cc_backtest.py). `classify_regime` looks at where the last price sits relative to its trailing 200-day SMA — `bull` if it's >5% above, `bear` if >5% below, `sideways` if within the band, `unknown` for the first 199 days when there aren't enough observations yet. `regime_analysis` runs the classifier at each day (using only past prices — no future peeking) and sums each closed trade's P&L into the regime active on its close date.
 
-def regime_analysis(dates, prices, realized_pnls):
-    """
-    Analyze returns by market regime.
-    
-    Returns:
-        stats by regime (bull, bear, sideways)
-    """
-    
-    # Classify the regime at each day using only data up to that day (no future peeking).
-    # regimes[i] = regime on day i, based on prices[:i].
-    #
-    # Examples:
-    #   i=0:   prices[:0]   = []           → "unknown" (no data)
-    #   i=50:  prices[:50]  = first 50 days → "unknown" (need 200 for SMA200)
-    #   i=199: prices[:199] = first 199 days → "unknown" (still 1 short)
-    #   i=200: prices[:200] = first 200 days → "bull"/"bear"/"sideways" (first real classification)
-    #   i=500: prices[:500] = first 500 days → uses last 200 of those to classify
-    #
-    # The first 200 entries will always be "unknown" since classify_regime
-    # returns "unknown" when it has fewer than 200 prices to compute the SMA.
-    regimes = [classify_regime(prices[:i]) for i in range(len(prices))]
-    
-    results = {
-        'bull': [],
-        'bear': [],
-        'sideways': [],
-    }
-    
-    # zip pairs each trade's PnL with the regime that was active on that day,
-    # then we bucket the PnL into the matching regime list.
-    # e.g., zip([+50, -20, +30], ["bull", "bear", "bull"])
-    #   → results["bull"]  = [+50, +30]
-    #   → results["bear"]  = [-20]
-    #   → results["sideways"] = []
-    for pnl, regime in zip(realized_pnls, regimes):
-        results[regime].append(pnl)
-    
-    # Dict comprehension: loop over each regime and its list of PnLs,
-    # and compute summary stats for each.
-    # e.g., results = {"bull": [+50, +30], "bear": [-20], "sideways": []}
-    #   → {"bull":     {"total_pnl": 80,  "num_trades": 2, "avg_pnl": 40},
-    #      "bear":     {"total_pnl": -20, "num_trades": 1, "avg_pnl": -20},
-    #      "sideways": {"total_pnl": 0,   "num_trades": 0, "avg_pnl": 0}}
-    return {
-        regime: {
-            'total_pnl': sum(pnls),
-            'num_trades': len(pnls),
-            'avg_pnl': np.mean(pnls) if pnls else 0,
-        }
-        for regime, pnls in results.items()
-    }
-```
+**Our result** (`__main__` params on the bundled MSFT data, pinned by `test_regime_analysis`):
 
-**Our result** (from regime breakdown in rigorous_backtest.json):
+| Regime | Days | Total P&L | Avg P&L/day |
+| --- | ---: | ---: | ---: |
+| Bull | 1,690 | $17,876 | $10.58 |
+| Bear | 280 | $152,358 | $544.14 |
+| Sideways | 346 | $123,527 | $357.02 |
+| Unknown (first 199 days) | 199 | $5,456 | $27.42 |
 
-- **Bull markets (1,815 days):** +$17,381 in CC income (~$9.57/day avg)
-- **Bear markets (165 days):** +$3,899 in CC income (~$23.63/day avg — premiums are richest here)
-- **Sideways (272 days):** +$3,765 in CC income (~$13.84/day avg)
-
-**Interpretation:** Covered call income is positive in ALL regimes. Bear markets actually produce the highest per-day income because volatility (and thus premiums) are elevated. This is what we want — the strategy is defensive.
+**Interpretation:** Bear and sideways regimes produce **about 50× the per-day premium** of bull regimes, even though bull days dominate the day count (1,690 out of 2,515). Two things drive this: (1) volatility is higher in non-bull regimes, so option premium per trade is richer; (2) more positions hit their profit target or assignment threshold when the stock isn't grinding steadily upward. The strategy is structurally defensive — it earns most of its keep when the market is anything other than a one-way bull. That's the point of selling vol.
 
 ### Common Mistake: Only Testing in Bull Markets
 

@@ -579,7 +579,118 @@ def compute_statistics(
 
 
 # ====================
-# 5. Main
+# 5. Regime Analysis
+# ====================
+
+def classify_regime(
+    prices: NDArray[np.floating[Any]] | list[float],
+    window: int = 200,
+    threshold: float = 0.05,
+) -> str:
+    """
+    Classify the market regime at the *end* of `prices` based on where
+    the last price sits relative to its trailing-`window` simple moving
+    average:
+
+      - "bull"     if last price > SMA × (1 + threshold)
+      - "bear"     if last price < SMA × (1 − threshold)
+      - "sideways" if last price is within ±threshold of the SMA
+      - "unknown"  if there are fewer than `window` observations
+
+    Args:
+        prices: array of closing prices (chronological).
+        window: SMA lookback in trading days (default 200, roughly one
+            calendar year).
+        threshold: fractional band around the SMA that counts as
+            "sideways" (default 0.05 = ±5%).
+
+    Returns:
+        One of 'bull', 'bear', 'sideways', 'unknown'.
+    """
+    if len(prices) < window:
+        return 'unknown'
+    prices_arr = np.asarray(prices, dtype=float)
+    sma = float(prices_arr[-window:].mean())
+    recent = float(prices_arr[-1])
+    if recent > sma * (1.0 + threshold):
+        return 'bull'
+    if recent < sma * (1.0 - threshold):
+        return 'bear'
+    return 'sideways'
+
+
+def regime_analysis(
+    dates: list[str] | NDArray[Any],
+    prices: NDArray[np.floating[Any]] | list[float],
+    trades: list[dict[str, Any]],
+    window: int = 200,
+    threshold: float = 0.05,
+) -> dict[str, dict[str, float | int]]:
+    """
+    Aggregate the overlay's realized P&L by market regime.
+
+    For each day i, classifies the regime using `prices[:i + 1]` only —
+    no future peeking. For each closed trade, looks up the regime on
+    the trade's close date and adds that trade's P&L to the matching
+    regime bucket. The first `window − 1` days are classified as
+    "unknown" because the SMA needs `window` observations to compute.
+
+    Args:
+        dates: chronological list of date labels matching `prices`.
+        prices: chronological array of closing prices.
+        trades: list of trade dicts from `run_cc_overlay`, each with
+            at least 'date' and 'pnl' keys. Only trades with non-zero
+            pnl contribute (i.e., close/expiration/close_itm events).
+        window: SMA lookback for regime classification (default 200).
+        threshold: ±-band around the SMA for "sideways" (default 0.05).
+
+    Returns:
+        Dict keyed by 'bull', 'bear', 'sideways', 'unknown' with:
+          - days: number of days classified as this regime
+          - total_pnl: sum of trade pnls that closed in this regime
+          - avg_pnl_per_day: total_pnl / days (0 if days == 0)
+    """
+    prices_arr = np.asarray(prices, dtype=float)
+    n = len(prices_arr)
+    # Regime at each day, using only data up to and including that day.
+    regimes = [
+        classify_regime(prices_arr[:i + 1], window, threshold) for i in range(n)
+    ]
+
+    day_counts: dict[str, int] = {'bull': 0, 'bear': 0, 'sideways': 0, 'unknown': 0}
+    for r in regimes:
+        day_counts[r] += 1
+
+    date_to_idx = {d: i for i, d in enumerate(dates)}
+    regime_pnl: dict[str, float] = {
+        'bull': 0.0, 'bear': 0.0, 'sideways': 0.0, 'unknown': 0.0,
+    }
+    for trade in trades:
+        pnl = trade.get('pnl', 0)
+        if not pnl:
+            continue
+        idx = date_to_idx.get(trade['date'])
+        if idx is None:
+            continue
+        regime_pnl[regimes[idx]] += float(pnl)
+
+    return {
+        regime: {
+            'days': day_counts[regime],
+            'total_pnl': round(regime_pnl[regime], 2),
+            'avg_pnl_per_day': round(
+                regime_pnl[regime] / day_counts[regime]
+                if day_counts[regime] > 0
+                else 0.0,
+                2,
+            ),
+        }
+        for regime in ('bull', 'bear', 'sideways', 'unknown')
+    }
+
+
+# ====================
+# 6. Main
 # ====================
 
 if __name__ == '__main__':

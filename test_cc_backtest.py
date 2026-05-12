@@ -16,10 +16,12 @@ from cc_backtest import (
     bs_delta,
     bs_price,
     calc_rolling_volatility,
+    classify_regime,
     compute_statistics,
     find_strike_for_delta,
     normal_cdf,
     normal_pdf,
+    regime_analysis,
     run_cc_overlay,
 )
 
@@ -1132,3 +1134,69 @@ class TestMsftTenYearRegression:
         assert percentile == 100  # real path beats every shuffle
         assert mc_mean == pytest.approx(654.0, abs=2.0)
         assert max(mc_returns) == pytest.approx(934.0, abs=2.0)
+
+    def test_classify_regime_thresholds(self) -> None:
+        """classify_regime returns the right label at each band edge.
+
+        Flat history at 100 for 200 days → SMA = 100. With the
+        default ±5% threshold:
+          - price > 105   → 'bull'
+          - price < 95    → 'bear'
+          - 95 ≤ p ≤ 105  → 'sideways'
+          - <200 prices   → 'unknown'
+
+        The edge case 'price exactly equal to threshold' stays
+        sideways (strict inequalities for bull/bear).
+        """
+        base = [100.0] * 200
+
+        assert classify_regime(base + [106.0]) == 'bull'
+        assert classify_regime(base + [94.0]) == 'bear'
+        assert classify_regime(base + [100.0]) == 'sideways'
+        # Boundary: strict inequalities, so equal-to-threshold stays sideways
+        assert classify_regime(base + [105.0]) == 'sideways'
+        assert classify_regime(base + [95.0]) == 'sideways'
+        # Insufficient history
+        assert classify_regime([100.0] * 50) == 'unknown'
+        assert classify_regime([]) == 'unknown'
+
+    def test_regime_analysis(
+        self, data: tuple[list[str], np.ndarray[Any, np.dtype[np.float64]]]
+    ) -> None:
+        """Aggregate overlay PnL by bull/bear/sideways/unknown regime.
+
+        Classifies each day with a trailing-200-day SMA at ±5% bands;
+        the first 199 days are 'unknown' because the SMA needs 200
+        observations to compute. Each closed trade's pnl is bucketed
+        into the regime active on its close date — no future peeking.
+
+        Empirical observation on the bundled MSFT data: most of the
+        overlay's premium income comes from days the SMA classifies
+        as *bear* or *sideways*, not bull. Bull days dominate the
+        day count (1,690 of 2,515) but contribute only ~$18K of
+        trade pnl; bear days are ~280 but contribute ~$152K, because
+        premium is richest where volatility is highest.
+        """
+        dates, prices = data
+        _, trades, _ = run_cc_overlay(dates, prices, _TUTORIAL_PARAMS)
+        result = regime_analysis(dates, prices, trades)
+
+        # Day counts: SMA200 with ±5% bands on MSFT 2016-2026 produces
+        # this exact split. Total equals len(prices) by construction.
+        assert result['bull']['days'] == 1690
+        assert result['bear']['days'] == 280
+        assert result['sideways']['days'] == 346
+        assert result['unknown']['days'] == 199
+        total_days = sum(result[r]['days'] for r in result)
+        assert total_days == len(prices)
+
+        # Per-regime trade PnL — the tutorial's headline empirical claim.
+        assert result['bull']['total_pnl'] == pytest.approx(17875.84, abs=5.0)
+        assert result['bear']['total_pnl'] == pytest.approx(152357.91, abs=5.0)
+        assert result['sideways']['total_pnl'] == pytest.approx(123527.42, abs=5.0)
+        assert result['unknown']['total_pnl'] == pytest.approx(5456.15, abs=5.0)
+
+        # Bear's per-day average dwarfs bull's — premium is richest
+        # in volatile regimes. Specifically: ~$544/day in bear vs ~$11/day
+        # in bull, i.e. ~50× higher.
+        assert result['bear']['avg_pnl_per_day'] > 30 * result['bull']['avg_pnl_per_day']
