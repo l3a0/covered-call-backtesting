@@ -62,7 +62,7 @@ For an explanation of each output line — including what "assignment loss" mean
 ## Tests
 
 ```bash
-pytest test_cc_backtest.py          # all 71 tests
+pytest test_cc_backtest.py          # run the full test suite
 pytest test_cc_backtest.py -v       # verbose
 pytest --cov=. --cov-branch         # with coverage
 ```

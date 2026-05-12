@@ -979,13 +979,36 @@ class TestMsftTenYearRegression:
     ) -> None:
         """Perturbing one param at a time reproduces the tutorial's sweep numbers.
 
-        These pin both the individual returns and the "robust" verdict: the
-        worst drop from base stays single-digit-percent of the base return.
+        Sensitivity analysis: for each parameter, vary it by a fixed
+        offset from base and measure impact on total return. *High*
+        sensitivity (large swings under small perturbations) suggests
+        overfitting — the optimum is a knife edge rather than a plateau.
+        A robust strategy should stay in a similar range across the sweep.
+
+        Each variant runs the full overlay with all params held fixed
+        except the one being perturbed:
+          - call_delta sweep at ±0.05 / ±0.10 from base=0.25
+          - close_at_pct sweep at ±0.10 / ±0.20 from base=0.75
+
+        A real sensitivity helper would also skip invalid parameter
+        values (negative call_delta, non-positive dte, close_at_pct ≤ 0
+        or > 1) before running the backtest; none of the sweeps below
+        hit those edges, so this test doesn't bother.
+
+        These pin both the individual returns and the "robust" verdict:
+        the worst drop from base stays single-digit-percent of the base
+        return — the "Swing" interpretation in the tutorial's example
+        output ("robust" if the swing is small relative to base).
         """
         dates, prices = data
         base = _TUTORIAL_PARAMS[param]
         returns: list[float] = []
         for offset, expected in offsets_and_returns:
+            # Hold all params fixed except the one being perturbed; only
+            # `param` shifts by `offset` from its base value. The expected
+            # total_return_pct is pinned per offset so a regression here
+            # surfaces as a test failure rather than a silent drift in
+            # the tutorial's worked example.
             test_params = {**_TUTORIAL_PARAMS, param: base + offset}
             summary, _, _ = run_cc_overlay(dates, prices, test_params)
             assert summary['total_return_pct'] == pytest.approx(expected, abs=0.5)
@@ -993,6 +1016,10 @@ class TestMsftTenYearRegression:
         base_return = next(
             r for (off, _), r in zip(offsets_and_returns, returns) if off == 0.0
         )
+        # Worst drop from base, as a percentage of base. Single-digit-%
+        # means the strategy isn't fragile to this parameter — the
+        # "robust" verdict in the tutorial. Double-digit % drops would
+        # indicate the chosen value is a knife-edge optimum.
         worst_drop_pct = (base_return - min(returns)) / base_return * 100
         assert worst_drop_pct < 10.0  # "robust": single-digit-percent drop
 
@@ -1001,40 +1028,102 @@ class TestMsftTenYearRegression:
     ) -> None:
         """Reproduce the tutorial's Monte Carlo shuffle (500 paths, seed=42).
 
-        Shuffles the daily-return *order*, rebuilds synthetic price paths, and
-        reruns the overlay on each. The real ordered path should beat every
+        Monte Carlo randomization test by shuffling daily returns.
+
+        Algorithm:
+            1. Calculate daily returns from actual prices.
+            2. Run real backtest (baseline).
+            3. For each shuffle: randomize return order, rebuild prices,
+               backtest.
+            4. Calculate percentile of real return vs the MC distribution.
+
+        Why this works: real prices have a specific *order* — trends,
+        mean reversion, volatility clusters. Shuffling destroys that
+        order while keeping the exact same set of daily returns (same
+        mean, same volatility, same distribution). If the strategy
+        profits on both real and shuffled paths, it's capturing
+        statistical *properties* of the returns and those survive
+        shuffling. If it only works on the real path, it was exploiting
+        the specific *sequence* — overfitting or luck.
+
+        On the bundled MSFT data the real ordered path beats every
         shuffled path (percentile 100), with mc_mean ~654% and the best
-        shuffled path ~934% — i.e. the overlay exploits real price structure,
-        not just the return distribution. This is the slowest test in the
-        suite (~500 backtests, a couple of seconds).
+        shuffled path ~934% — the overlay exploits real price structure,
+        not just the return distribution. This is the slowest test in
+        the suite (~500 backtests, a couple of seconds).
         """
         dates, prices = data
+
+        # Run baseline (real backtest) for comparison.
         real_summary, _, _ = run_cc_overlay(dates, prices, _TUTORIAL_PARAMS)
         real_return = real_summary['total_return_pct']
 
+        # Calculate daily returns from the real price series.
         daily_returns = [
             float((prices[i] - prices[i - 1]) / prices[i - 1])
             for i in range(1, len(prices))
         ]
+
         rng = random.Random(_MC_SEED)
         mc_returns: list[float] = []
+
         for _ in range(_MC_SHUFFLES):
+            # Shuffle returns (preserves distribution, changes sequence).
             shuffled = daily_returns.copy()
             rng.shuffle(shuffled)
+
+            # Rebuild a price series from the shuffled returns:
+            # start at the original first price, then chain-multiply
+            # each return. `synthetic[-1]` grabs the last price in the
+            # list so far, so each new price builds on the previous one
+            # (just like real prices). `(1 + ret)` converts a return
+            # into a price multiplier:
+            #   ret=+0.02 → 1.02 (up 2%)
+            #   ret=-0.01 → 0.99 (down 1%)
+            #   ret=  0   → 1.00 (flat)
+            # e.g., price[0]=100, returns=[+2%, -1%, +3%]
+            #   → 100 → 100*1.02=102 → 102*0.99=100.98 → 100.98*1.03=104.01
+            # Same set of daily moves, different order → different price path.
             synthetic = [float(prices[0])]
             for ret in shuffled:
                 synthetic.append(synthetic[-1] * (1 + ret))
+
+            # Run backtest on the synthetic prices.
+            # Some shuffled paths can blow up inside the backtest —
+            # common causes:
+            #   - Log of zero/negative price: large negative returns
+            #     can compound a small price to zero or below, crashing
+            #     np.log() in the volatility calculation.
+            #   - Division by zero: a flat price stretch → stdev=0 →
+            #     Black-Scholes divides by volatility.
+            #   - Black-Scholes edge cases: extreme strikes or near-zero
+            #     time to expiry produce NaN/Inf in option-pricing math.
+            # A few failed shuffles out of hundreds don't affect the
+            # distribution, so we skip them and keep going. With seed=42
+            # on this data, none of the 500 shuffles blow up.
             try:
                 mc_summary, _, _ = run_cc_overlay(
                     dates, np.array(synthetic, dtype=np.float64), _TUTORIAL_PARAMS
                 )
                 mc_returns.append(mc_summary['total_return_pct'])
             except Exception:
-                # A few shuffled paths can blow up the pricing math; the
-                # tutorial skips them too. With seed=42 on this data, none do.
                 continue
 
         assert len(mc_returns) == _MC_SHUFFLES  # no path blew up at this seed
+
+        # Percentile: what % of random shuffles did our real strategy beat?
+        #
+        # Step 1: count how many MC returns are worse than the real return.
+        #   e.g., real_return=945, mc_returns=[800, 900, 1100, 700, 850]
+        #   worse = 4 (we beat 800, 900, 700, 850 — all except 1100)
+        #
+        # Step 2: convert to a percentile.
+        #   percentile = 100 * 4 / 5 = 80
+        #   → "Our strategy beat 80% of random shuffles"
+        #
+        # High percentile (80+) = strategy is genuinely good, not lucky.
+        # Low percentile (~30) = random ordering does just as well,
+        #   suggesting returns came from the market, not the strategy.
         worse = sum(1 for r in mc_returns if r < real_return)
         percentile = int(100 * worse / len(mc_returns))
         mc_mean = sum(mc_returns) / len(mc_returns)
