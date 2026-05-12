@@ -296,48 +296,7 @@ We work **backwards** from delta:
 
 This is called a **grid search**. It checks every whole-dollar strike in a range and picks the one whose delta is closest to the target. With only ~30–50 candidates to check, it runs instantly — and it naturally returns whole-dollar strikes that match real option chains.
 
-```python
-def find_strike_for_delta(S, T, r, sigma, target_delta, option_type='put'):
-    """
-    Find the whole-dollar strike K whose delta is closest to target_delta.
-    
-    Args:
-        S: current stock price
-        T: time to expiration (as fraction of year)
-        r: risk-free rate
-        sigma: volatility (annualized)
-        target_delta: desired delta
-            For puts: negative (e.g., -0.20)
-            For calls: positive (e.g., 0.25)
-        option_type: 'put' or 'call' (default: 'put')
-    
-    Returns:
-        float: strike price (whole dollar amount)
-    """
-    best_strike = S
-    best_diff = float('inf')
-    
-    if option_type == 'put':
-        # Puts: search below spot (80% to 102%)
-        start = int(S * 0.80)
-        end = int(S * 1.02)
-    else:
-        # Calls: search above spot (98% to 125%)
-        start = int(S * 0.98)
-        end = int(S * 1.25)
-    
-    for k in range(start, end + 1):
-        K = float(k)  # Each k is already a whole dollar
-        delta = bs_delta(S, K, T, r, sigma, option_type=option_type)
-        
-        # Track which strike has delta closest to target
-        diff = abs(delta - target_delta)
-        if diff < best_diff:
-            best_diff = diff
-            best_strike = K
-    
-    return best_strike
-```
+The production implementation is [`cc_backtest.py::find_strike_for_delta`](https://github.com/l3a0/covered-call-backtesting/blob/main/cc_backtest.py). It scans whole-dollar strikes in `[0.80·S, 1.02·S]` for puts and `[0.98·S, 1.25·S]` for calls — the asymmetric ranges cover the relevant out-of-the-money zone for each option type while keeping the candidate count small. For each candidate it calls `bs_delta(...)` and tracks the strike whose computed delta is closest to `target_delta`.
 
 **Example run:**
 
@@ -1473,46 +1432,18 @@ The intuition transfers nicely. If your data has long memory (momentum factors, 
 
 #### The Code
 
-Add to `cc_backtest.py` (the full version is in `compute_statistics`):
+The full implementation is [`cc_backtest.py::compute_statistics`](https://github.com/l3a0/covered-call-backtesting/blob/main/cc_backtest.py). Signature:
 
 ```python
-def compute_statistics(daily_equity, num_contracts, cash, periods_per_year=252):
-    shares = num_contracts * 100
-    equity = np.array([d['equity'] for d in daily_equity], dtype=float)
-    prices = np.array([d['price'] for d in daily_equity], dtype=float)
-    bh_equity = shares * prices + cash
-
-    overlay_ret = np.diff(equity) / equity[:-1]
-    bh_ret = np.diff(bh_equity) / bh_equity[:-1]
-    excess = overlay_ret - bh_ret  # overlay's contribution, stock cancels
-
-    n = len(excess)
-    mean_e = float(np.mean(excess))
-    var_e = float(np.var(excess, ddof=1))
-
-    # Naive t-stat: assumes IID — inflated for overlays
-    t_naive = mean_e / math.sqrt(var_e / n)
-
-    # Newey-West HAC: variance of the mean under autocorrelation
-    L = int(4 * (n / 100) ** (2 / 9))
-    nw_sum = 0.0
-    for k in range(1, L + 1):
-        weight = 1.0 - k / (L + 1)
-        cov_k = float(np.mean((excess[:-k] - mean_e) * (excess[k:] - mean_e)))
-        nw_sum += weight * cov_k
-    var_mean_nw = (var_e + 2 * nw_sum) / n
-    se_nw = math.sqrt(max(var_mean_nw, 0.0))  # NW variance can be < 0 at short n
-    t_nw = mean_e / se_nw if se_nw > 0 else 0.0
-
-    return {
-        't_stat_naive': round(t_naive, 2),
-        't_stat_newey_west': round(t_nw, 2),
-        'sharpe_excess': round((mean_e * periods_per_year) /
-                               math.sqrt(var_e * periods_per_year), 3),
-        'passes_t_2': abs(t_nw) > 2.0,
-        'passes_t_3': abs(t_nw) > 3.0,
-    }
+def compute_statistics(
+    daily_equity: list[dict[str, Any]],
+    num_contracts: int,
+    cash: float,
+    periods_per_year: int = 252,
+) -> dict[str, Any]:
 ```
+
+Internally it reconstructs the buy-and-hold equity curve from `shares × price + cash`, computes daily excess returns by differencing both curves, then runs both the naive `mean / (std/√n)` t-stat *and* the Newey-West-corrected version (with `L = floor(4·(n/100)^(2/9))` Bartlett-weighted lags via Andrews / Newey-West). Returns the two t-stats, annualized excess return/vol, Sharpe of excess, the chosen lag cutoff, and pass/fail flags for the t=2 and t=3 thresholds.
 
 #### What MSFT Actually Says
 
