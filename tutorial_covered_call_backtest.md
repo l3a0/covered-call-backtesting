@@ -348,109 +348,15 @@ def find_strike_for_delta(S, T, r, sigma, target_delta, option_type='put'):
 
 ### Code Walkthrough: bs_price(), bs_delta(), find_strike_for_delta()
 
-Here's the full Black-Scholes toolkit, commented:
+The full Black-Scholes toolkit — `normal_pdf`, `normal_cdf`, `bs_price`, `bs_delta`, and `find_strike_for_delta` — lives in [`cc_backtest.py`'s section 1](https://github.com/l3a0/covered-call-backtesting/blob/main/cc_backtest.py). What each one does:
 
-```python
-import math
-
-def normal_pdf(x):
-    """The height of the bell curve at point x."""
-    return math.exp(-x**2 / 2.0) / math.sqrt(2 * math.pi)
-
-def normal_cdf(x):
-    """
-    Standard normal CDF Φ(x) — area under the bell curve from -∞ to x.
-
-    Uses the identity Φ(x) = 0.5 · (1 + erf(x/√2)) and delegates to
-    math.erf, which uses the C standard library's optimized rational/
-    Chebyshev approximation (~15-16 decimals, near-machine-precision).
-
-    The educational section above shows the Abramowitz & Stegun 1964
-    polynomial (~7 decimals) so you can see *why* CDF approximations
-    work. In production we prefer math.erf because it's effectively
-    exact: across hundreds of thousands of CDF calls in a backtest,
-    A&S's 8th-decimal error compounds into a few cents of equity drift.
-    """
-    return 0.5 * (1.0 + math.erf(x / math.sqrt(2)))
-
-def bs_price(S, K, T, r, sigma, option_type='put'):
-    """
-    Black-Scholes option price.
-    
-    Args:
-        S: stock price
-        K: strike price
-        T: time to expiration (years)
-        r: risk-free rate
-        sigma: volatility (annualized)
-        option_type: 'put' or 'call' (default: 'put')
-    
-    Returns:
-        price: option premium
-    """
-    d1 = (math.log(S / K) + (r + 0.5 * sigma**2) * T) / (sigma * math.sqrt(T))
-    d2 = d1 - sigma * math.sqrt(T)
-    
-    N_d1 = normal_cdf(d1)
-    N_d2 = normal_cdf(d2)
-    
-    if option_type == 'put':
-        price = K * math.exp(-r * T) * (1 - N_d2) - S * (1 - N_d1)
-    else:  # call
-        price = S * N_d1 - K * math.exp(-r * T) * N_d2
-    
-    return price
-
-def bs_delta(S, K, T, r, sigma, option_type='put'):
-    """
-    Black-Scholes delta (probability of ITM at expiration).
-    
-    Args:
-        option_type: 'put' or 'call' (default: 'put')
-    
-    Returns:
-        delta: -1 to 0 for puts, 0 to 1 for calls
-    """
-    d1 = (math.log(S / K) + (r + 0.5 * sigma**2) * T) / (sigma * math.sqrt(T))
-    
-    if option_type == 'put':
-        delta = normal_cdf(d1) - 1
-    else:  # call
-        delta = normal_cdf(d1)
-    
-    return delta
-
-def find_strike_for_delta(S, T, r, sigma, target_delta, option_type='put'):
-    """
-    Grid search to find the whole-dollar strike with delta closest to target.
-    
-    Real option chains use whole-dollar strikes (e.g., $370, $375, $380).
-    Grid search naturally produces whole-dollar results because it checks
-    every integer in the range.
-    
-    Returns:
-        float: strike price (whole dollar amount)
-    """
-    best_strike = S
-    best_diff = float('inf')
-    
-    if option_type == 'put':
-        start = int(S * 0.80)
-        end = int(S * 1.02)
-    else:
-        start = int(S * 0.98)
-        end = int(S * 1.25)
-    
-    for k in range(start, end + 1):
-        K = float(k)
-        delta = bs_delta(S, K, T, r, sigma, option_type=option_type)
-        diff = abs(delta - target_delta)
-        if diff < best_diff:
-            best_diff = diff
-            best_strike = K
-    
-    return best_strike
-```
+| Function | What it computes |
+| --- | --- |
+| `normal_pdf(x)` | Height of the standard-normal bell curve at `x`. Used inside the A&S polynomial CDF approximation shown earlier. |
+| `normal_cdf(x)` | Area under the bell curve from `-∞` to `x` — converts a z-score into a probability. Production uses `math.erf` (~15 decimals) rather than the polynomial (~7 decimals); the educational section above shows the polynomial so you can see *how* a CDF approximation works, and the production docstring explains why the switch matters at scale (A&S's 8th-decimal error compounds into a few cents of equity drift across hundreds of thousands of CDF calls). |
+| `bs_price(S, K, T, r, sigma, option_type='put')` | The Black-Scholes formula itself — returns the option premium given stock, strike, time, rate, vol, and option type. |
+| `bs_delta(S, K, T, r, sigma, option_type='put')` | Just `N(d1)` for calls or `N(d1) − 1` for puts — the probability of finishing ITM (and the option's first-derivative sensitivity to stock price). |
+| `find_strike_for_delta(S, T, r, sigma, target_delta, option_type='put')` | Grid search across whole-dollar strikes; returns the one whose Black-Scholes delta is closest to `target_delta`. Whole-dollar because real option chains list whole-dollar strikes. |
 
 **How to use it:**
 
@@ -807,99 +713,29 @@ Over a year with 12 calls sold, transaction costs can eat 5–10% of returns.
 
 ### The Dynamic IV Multiplier: Context Matters
 
-We'll use a simple regime-based IV multiplier:
+We use a simple regime-based IV multiplier. `detect_regime(rolling_vol)` classifies the current 30-day annualized HV into one of three buckets, and `estimate_iv(rolling_vol, regime)` applies the appropriate multiplier:
 
-```python
-def estimate_iv(rolling_vol, regime='normal'):
-    """
-    Adjust HV to IV estimate based on regime.
-    
-    Args:
-        rolling_vol: historical volatility (annualized)
-        regime: 'high' (vol > 25%), 'normal', 'low' (vol < 15%)
-    
-    Returns:
-        iv: implied volatility estimate
-    """
-    if regime == 'high':
-        multiplier = 1.1  # High vol already; IV won't expand much
-    elif regime == 'normal':
-        multiplier = 1.3  # Typical adjustment
-    else:  # low
-        multiplier = 1.5  # Low vol; expect mean reversion
-    
-    return rolling_vol * multiplier
+| Regime | HV range | Multiplier | Why |
+| --- | --- | --- | --- |
+| **High** | > 25% | 1.1× | IV is already elevated; further expansion is limited. |
+| **Normal** | 15–25% | 1.3× | Typical HV-to-IV adjustment in calm markets. |
+| **Low** | < 15% | 1.5× | IV is suppressed; expect mean reversion to higher values. |
 
-def detect_regime(rolling_vol):
-    """Classify volatility regime."""
-    if rolling_vol > 0.25:
-        return 'high'
-    elif rolling_vol < 0.15:
-        return 'low'
-    else:
-        return 'normal'
-```
+Implementations: [`cc_backtest.py::detect_regime`](https://github.com/l3a0/covered-call-backtesting/blob/main/cc_backtest.py) and [`::estimate_iv`](https://github.com/l3a0/covered-call-backtesting/blob/main/cc_backtest.py).
 
 ### Rolling Historical Volatility: 30-Day Window, Log Returns, Annualize
 
-```python
-def calc_rolling_volatility(prices, window=30):
-    """
-    Calculate rolling historical volatility.
-    
-    Args:
-        prices: array of daily closing prices
-        window: lookback (default 30 days)
-    
-    Returns:
-        vols: array of annualized volatilities
-    """
-    import numpy as np
-    
-    # Log returns: ln(price_t / price_{t-1})
-    # How: np.log(prices) logs every price, then np.diff subtracts
-    # adjacent elements. This works because ln(a) - ln(b) = ln(a/b),
-    # so diff(log(prices)) = ln(price_t / price_{t-1}).
-    # Why log returns: they're additive across days (can sum them for
-    # multi-day returns) and symmetric (+5% then -5% nets to zero).
-    # NOTE: order matters — log(diff(prices)) is NOT the same thing
-    # and will break on negative price changes.
-    log_returns = np.diff(np.log(prices))
-    
-    # Standard deviation over rolling window
-    vols = []
-    for i in range(len(log_returns)):
-        if i < window - 1:
-            # Not enough prior data points to fill the window yet (e.g., with a
-            # 30-day window, we need at least 30 returns before we can compute
-            # the first volatility). Append NaN to keep vols[] aligned index-
-            # for-index with log_returns[] so downstream lookups stay correct.
-            vols.append(np.nan)
-        else:
-            # Slice the last `window` returns ending at i. Both +1s compensate
-            # for Python's exclusive right bound: i+1 ensures i is included,
-            # and i-window+1 shifts the start right by 1 so the slice contains
-            # exactly `window` items. E.g., window=30, i=35 →
-            # log_returns[6:36] = indices 6..35 = 30 values.
-            window_returns = log_returns[i-window+1:i+1]
+The implementation is [`cc_backtest.py::calc_rolling_volatility`](https://github.com/l3a0/covered-call-backtesting/blob/main/cc_backtest.py) — for each price index, it computes the standard deviation of the last `window` log returns and annualizes by `√252`.
 
-            # Sample std dev (ddof=1 = Bessel's correction) because these
-            # returns are a sample from the stock's theoretical distribution,
-            # not the entire population. Dividing by N-1 avoids underestimating.
-            std_dev = np.std(window_returns, ddof=1)
+Four pedagogical notes worth pulling out, because they show up in every volatility-related calculation in this codebase:
 
-            # Annualize: variance (σ²) is additive over independent periods,
-            # so annual variance = daily variance × 252:
-            #   σ²_annual = σ²_daily × 252
-            # Taking the square root of both sides to get std dev (volatility):
-            #   σ_annual = √(σ²_daily × 252) = σ_daily × √252
-            # This is why we multiply by √252, NOT 252 — std devs don't add
-            # linearly, they scale with the square root of time.
-            annualized = std_dev * np.sqrt(252)
-            vols.append(annualized)
-    
-    return np.array(vols)
-```
+1. **Log returns vs. simple returns.** `np.diff(np.log(prices))` computes `ln(price_t / price_{t-1})` for each day. The identity `log(a) − log(b) = log(a/b)` is what makes this work. Log returns are *additive across days* (you can sum them to get multi-day returns) and *symmetric* (a +5% followed by a −5% nets to zero in log space). Note that `log(diff(prices))` is *not* the same thing and will break on any negative price change.
+
+2. **NaN padding for alignment.** The first `window - 1` indices of the output get `NaN` because there aren't enough prior return observations to fill the window yet (with a 30-day window, you need at least 30 returns before the first valid volatility). NaN-padding keeps the output array index-aligned with the input price series, so downstream lookups stay correct.
+
+3. **Bessel's correction (`ddof=1`).** The window's return values are a *sample* from the stock's theoretical distribution, not the population. Dividing by `N-1` instead of `N` corrects for the bias introduced when the sample mean is computed from the same data you're measuring deviation from. For `N = 30` the correction is small (about 3% larger std dev), but it's the statistically correct choice.
+
+4. **Annualize by `√252`, not `252`.** Variance (`σ²`) is additive over independent time periods, so `σ²_annual = σ²_daily × 252`. Taking square roots: `σ_annual = σ_daily × √252`. Standard deviations scale with the *square root* of time, not linearly. This is one of the most-confused identities in finance.
 
 **Example:**
 
@@ -981,7 +817,6 @@ The function takes the price series and the strategy parameters and returns `(su
 That's the whole loop. The state-machine diagram earlier in this section is the visual counterpart; the source code is the executable one.
 
 At the end of the loop, the function tallies summary statistics — total return, buy-and-hold benchmark, gross premium collected, buybacks and assignment costs, premium retention %, calls sold, win rate, max drawdown — and returns the three result objects.
-
 
 ### Common Mistake: Letting Shares Get Called Away vs. Buying Back ITM Calls
 
