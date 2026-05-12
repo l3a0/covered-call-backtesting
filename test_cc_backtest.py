@@ -3,7 +3,10 @@
 
 from __future__ import annotations
 
+import csv
 import math
+import os
+import random
 from typing import Any
 
 import numpy as np
@@ -837,3 +840,206 @@ class TestComputeStatistics:
         assert math.isfinite(stats['t_stat_newey_west'])
         assert math.isfinite(stats['sharpe_excess'])
         assert stats['n_days'] == len(daily_equity) - 1
+
+
+# ====================
+# Regression: bundled MSFT 10-year backtest
+# ====================
+
+# Resolve the CSV relative to this file so the test passes regardless of the
+# directory pytest is invoked from.
+_MSFT_CSV = os.path.join(os.path.dirname(__file__), 'msft_10yr_prices.csv')
+
+# The parameters cc_backtest.py's __main__ uses and the tutorial documents.
+_TUTORIAL_PARAMS: dict[str, float] = {
+    'call_delta': 0.25,
+    'close_at_pct': 0.75,
+    'dte': 21,
+    'risk_free_rate': 0.045,
+    'capital': 100_000,
+}
+
+# Monte Carlo shuffle settings the tutorial reports its numbers for
+# ("500 shuffles, seed=42").
+_MC_SHUFFLES = 500
+_MC_SEED = 42
+
+
+def _load_msft_csv() -> tuple[list[str], np.ndarray[Any, np.dtype[np.float64]]]:
+    """Mirror the CSV parser in cc_backtest.py's __main__ block."""
+    dates: list[str] = []
+    prices: list[float] = []
+    with open(_MSFT_CSV) as f:
+        for row in csv.reader(f):
+            if not row or not row[0][:4].isdigit():
+                continue
+            dates.append(row[0])
+            prices.append(float(row[1]))
+    return dates, np.array(prices, dtype=np.float64)
+
+
+class TestMsftTenYearRegression:
+    """Pin the headline numbers the tutorial and README quote for the bundled
+    MSFT data.
+
+    These aren't "is the math correct" tests — TestRunCcOverlay and
+    TestComputeStatistics cover correctness against synthetic fixtures. This
+    class locks the *specific outputs* prose elsewhere in the repo cites, so an
+    engine change that would silently move those numbers fails CI instead of
+    leaving the docs quietly wrong.
+    """
+
+    @pytest.fixture(scope='class')
+    def data(self) -> tuple[list[str], np.ndarray[Any, np.dtype[np.float64]]]:
+        return _load_msft_csv()
+
+    @pytest.fixture(scope='class')
+    def result(
+        self, data: tuple[list[str], np.ndarray[Any, np.dtype[np.float64]]]
+    ) -> tuple[dict[str, Any], dict[str, Any]]:
+        dates, prices = data
+        summary, _, daily_equity = run_cc_overlay(dates, prices, _TUTORIAL_PARAMS)
+        stats = compute_statistics(
+            daily_equity,
+            num_contracts=summary['num_contracts'],
+            cash=summary['cash'],
+        )
+        return summary, stats
+
+    def test_capital_sizing(self, result: tuple[dict[str, Any], dict[str, Any]]) -> None:
+        """$100K sizes into 20 contracts: ~$95.6K stock + ~$4.4K cash."""
+        summary, _ = result
+        assert summary['num_contracts'] == 20
+        assert summary['initial_stock_cost'] == pytest.approx(95_573.55, abs=0.5)
+        assert summary['cash'] == pytest.approx(4_426.45, abs=0.5)
+
+    def test_returns_breakdown(self, result: tuple[dict[str, Any], dict[str, Any]]) -> None:
+        """Buy-and-hold $746K (+646%) + net overlay $299K = overlay $1.045M (+945%)."""
+        summary, _ = result
+        assert summary['buy_hold_final'] == pytest.approx(746_166.44, abs=1.0)
+        assert summary['buy_hold_return_pct'] == pytest.approx(646.17, abs=0.05)
+        assert summary['net_overlay_pnl'] == pytest.approx(298_947.87, abs=1.0)
+        assert summary['excess_return_pct'] == pytest.approx(298.95, abs=0.05)
+        assert summary['final_equity'] == pytest.approx(1_045_114.31, abs=1.0)
+        # The tutorial's headline "~945% total return on the bundled $100K config".
+        assert summary['total_return_pct'] == pytest.approx(945.11, abs=0.05)
+
+    def test_overlay_pnl_breakdown(self, result: tuple[dict[str, Any], dict[str, Any]]) -> None:
+        """185 calls sold; ~$1.025M premium gross, ~$726K paid back in costs."""
+        summary, _ = result
+        assert summary['num_calls_sold'] == 185
+        assert summary['total_premium_collected'] == pytest.approx(1_025_092.00, abs=5.0)
+        assert summary['overlay_costs'] == pytest.approx(726_144.12, abs=5.0)
+
+    def test_activity(self, result: tuple[dict[str, Any], dict[str, Any]]) -> None:
+        """~81% win rate, ~23% max drawdown."""
+        summary, _ = result
+        assert summary['win_rate'] == pytest.approx(81.0, abs=0.1)
+        assert summary['max_drawdown_pct'] == pytest.approx(23.02, abs=0.05)
+
+    def test_significance(self, result: tuple[dict[str, Any], dict[str, Any]]) -> None:
+        """Sharpe 0.163, naive t=0.51, NW t=0.58 at L=8 — clears neither bar."""
+        _, stats = result
+        assert stats['n_days'] == 2514
+        assert stats['years_of_data'] == pytest.approx(9.98, abs=0.005)
+        assert stats['ann_excess_return_pct'] == pytest.approx(1.591, abs=0.001)
+        assert stats['ann_excess_vol_pct'] == pytest.approx(9.79, abs=0.01)
+        assert stats['sharpe_excess'] == pytest.approx(0.163, abs=0.001)
+        assert stats['t_stat_naive'] == pytest.approx(0.51, abs=0.005)
+        assert stats['t_stat_newey_west'] == pytest.approx(0.58, abs=0.005)
+        assert stats['nw_lag'] == 8
+        assert stats['passes_t_2'] is False
+        assert stats['passes_t_3'] is False
+
+    @pytest.mark.parametrize(
+        ('param', 'offsets_and_returns'),
+        [
+            # call_delta sweep: base 0.25 ± offset → total_return_pct.
+            # Tutorial (rounded for display): -0.10:882%  -0.05:861%  base:945%
+            #                                 +0.05:925%  +0.10:899%
+            (
+                'call_delta',
+                [(-0.10, 881.53), (-0.05, 861.36), (0.0, 945.11),
+                 (0.05, 925.27), (0.10, 898.97)],
+            ),
+            # close_at_pct sweep: base 0.75 ± offset → total_return_pct.
+            # Tutorial: -0.20:882%  -0.10:984%  base:945%  +0.10:965%  +0.20:895%
+            (
+                'close_at_pct',
+                [(-0.20, 882.29), (-0.10, 984.25), (0.0, 945.11),
+                 (0.10, 965.33), (0.20, 895.26)],
+            ),
+        ],
+    )
+    def test_sensitivity_perturbations(
+        self,
+        data: tuple[list[str], np.ndarray[Any, np.dtype[np.float64]]],
+        param: str,
+        offsets_and_returns: list[tuple[float, float]],
+    ) -> None:
+        """Perturbing one param at a time reproduces the tutorial's sweep numbers.
+
+        These pin both the individual returns and the "robust" verdict: the
+        worst drop from base stays single-digit-percent of the base return.
+        """
+        dates, prices = data
+        base = _TUTORIAL_PARAMS[param]
+        returns: list[float] = []
+        for offset, expected in offsets_and_returns:
+            test_params = {**_TUTORIAL_PARAMS, param: base + offset}
+            summary, _, _ = run_cc_overlay(dates, prices, test_params)
+            assert summary['total_return_pct'] == pytest.approx(expected, abs=0.5)
+            returns.append(summary['total_return_pct'])
+        base_return = next(
+            r for (off, _), r in zip(offsets_and_returns, returns) if off == 0.0
+        )
+        worst_drop_pct = (base_return - min(returns)) / base_return * 100
+        assert worst_drop_pct < 10.0  # "robust": single-digit-percent drop
+
+    def test_monte_carlo_shuffle(
+        self, data: tuple[list[str], np.ndarray[Any, np.dtype[np.float64]]]
+    ) -> None:
+        """Reproduce the tutorial's Monte Carlo shuffle (500 paths, seed=42).
+
+        Shuffles the daily-return *order*, rebuilds synthetic price paths, and
+        reruns the overlay on each. The real ordered path should beat every
+        shuffled path (percentile 100), with mc_mean ~654% and the best
+        shuffled path ~934% — i.e. the overlay exploits real price structure,
+        not just the return distribution. This is the slowest test in the
+        suite (~500 backtests, a couple of seconds).
+        """
+        dates, prices = data
+        real_summary, _, _ = run_cc_overlay(dates, prices, _TUTORIAL_PARAMS)
+        real_return = real_summary['total_return_pct']
+
+        daily_returns = [
+            float((prices[i] - prices[i - 1]) / prices[i - 1])
+            for i in range(1, len(prices))
+        ]
+        rng = random.Random(_MC_SEED)
+        mc_returns: list[float] = []
+        for _ in range(_MC_SHUFFLES):
+            shuffled = daily_returns.copy()
+            rng.shuffle(shuffled)
+            synthetic = [float(prices[0])]
+            for ret in shuffled:
+                synthetic.append(synthetic[-1] * (1 + ret))
+            try:
+                mc_summary, _, _ = run_cc_overlay(
+                    dates, np.array(synthetic, dtype=np.float64), _TUTORIAL_PARAMS
+                )
+                mc_returns.append(mc_summary['total_return_pct'])
+            except Exception:
+                # A few shuffled paths can blow up the pricing math; the
+                # tutorial skips them too. With seed=42 on this data, none do.
+                continue
+
+        assert len(mc_returns) == _MC_SHUFFLES  # no path blew up at this seed
+        worse = sum(1 for r in mc_returns if r < real_return)
+        percentile = int(100 * worse / len(mc_returns))
+        mc_mean = sum(mc_returns) / len(mc_returns)
+
+        assert real_return == pytest.approx(945.11, abs=0.05)
+        assert percentile == 100  # real path beats every shuffle
+        assert mc_mean == pytest.approx(654.0, abs=2.0)
+        assert max(mc_returns) == pytest.approx(934.0, abs=2.0)

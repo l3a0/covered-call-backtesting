@@ -1706,109 +1706,7 @@ If no → the strategy exploits a specific *sequence* of returns (could be luck)
 
 **Why this works:** Real prices have a specific order — trends, mean-reversion, volatility clusters. Shuffling destroys that order while keeping the exact same set of daily returns (same mean, same volatility, same distribution). So if your strategy profits on both real and shuffled paths, it's capturing **statistical properties** of the returns (e.g., collecting premium in a volatile market) — those survive shuffling. But if it only works on the real path, it was exploiting the **specific sequence** — like selling calls right before drops and not selling before rallies. That pattern won't repeat, so it's likely overfitting or luck. Think of it like poker: if you win with many random deals, you have real skill. If you only win with the exact hand order you practiced on, you just memorized that deck.
 
-```python
-def monte_carlo_shuffle(dates, prices, params, num_shuffles=1000):
-    """
-    Monte Carlo randomization test by shuffling daily returns.
-    
-    Algorithm:
-        1. Calculate daily returns from actual prices
-        2. Run real backtest (baseline)
-        3. For each shuffle: randomize return order, rebuild prices, backtest
-        4. Calculate percentile of real return vs MC distribution
-    
-    Args:
-        dates: list of trading dates
-        prices: list of closing prices
-        params: strategy parameters dict
-        num_shuffles: how many random shuffles to try
-    
-    Returns:
-        dict with real_return, mc_mean, mc_std, mc_percentile, etc.
-    """
-    import random
-    
-    # Run baseline (real backtest)
-    real_summary, _, _ = run_cc_overlay(dates, prices, params)
-    real_return = real_summary['total_return_pct']
-    
-    # Calculate daily returns
-    daily_returns = []
-    for i in range(1, len(prices)):
-        ret = (prices[i] - prices[i-1]) / prices[i-1]
-        daily_returns.append(ret)
-    
-    mc_returns = []
-    
-    for shuffle_idx in range(num_shuffles):
-        # Shuffle returns (preserves distribution, changes sequence)
-        shuffled_returns = daily_returns.copy()
-        random.shuffle(shuffled_returns)
-        
-        # Rebuild a price series from the shuffled returns:
-        # Start at the original first price, then chain-multiply each return.
-        # synthetic_prices[-1] grabs the last price in the list so far,
-        # so each new price builds on the previous one (just like real prices).
-        # (1 + ret) converts a return into a price multiplier:
-        #   ret=+0.02 → 1.02 (up 2%), ret=-0.01 → 0.99 (down 1%), ret=0 → 1.0 (flat)
-        # e.g., price[0]=100, returns=[+2%, -1%, +3%]
-        #   → 100 → 100*1.02=102 → 102*0.99=100.98 → 100.98*1.03=104.01
-        # Same set of daily moves, different order → different price path.
-        synthetic_prices = [prices[0]]
-        for ret in shuffled_returns:
-            synthetic_prices.append(synthetic_prices[-1] * (1 + ret))
-        
-        # Run backtest on synthetic prices.
-        # Some shuffled paths can blow up inside the backtest — common causes:
-        #   - Log of zero/negative price: large negative returns can compound a
-        #     small price to zero or below, crashing np.log() in volatility calc.
-        #   - Division by zero: a flat price stretch → stdev=0 → Black-Scholes
-        #     divides by volatility.
-        #   - Black-Scholes edge cases: extreme strikes or near-zero time to
-        #     expiry produce NaN/Inf in option pricing math.
-        # A few failed shuffles out of hundreds don't affect the distribution,
-        # so we skip them and keep going.
-        try:
-            mc_summary, _, _ = run_cc_overlay(dates, synthetic_prices, params)
-            mc_returns.append(mc_summary['total_return_pct'])
-        except:
-            continue
-    
-    # Calculate statistics
-    if mc_returns:
-        mc_mean = sum(mc_returns) / len(mc_returns)
-        variance = sum((r - mc_mean)**2 for r in mc_returns) / max(1, len(mc_returns) - 1)
-        mc_std = math.sqrt(variance)
-        
-        # Percentile: what % of random shuffles did our real strategy beat?
-        #
-        # Step 1: count how many MC returns are worse than our real return.
-        #   e.g., real_return=945, mc_returns=[800, 900, 1100, 700, 850]
-        #   worse = 4 (we beat 800, 900, 700, 850 — all except 1100)
-        #
-        # Step 2: convert to a percentile.
-        #   percentile = 100 * 4 / 5 = 80
-        #   → "Our strategy beat 80% of random shuffles"
-        #
-        # High percentile (e.g., 80+) = strategy is genuinely good, not lucky.
-        # Low percentile (e.g., 30)   = random ordering does just as well,
-        #   suggesting returns came from the market, not the strategy.
-        worse = sum(1 for r in mc_returns if r < real_return)
-        percentile = int(100 * worse / len(mc_returns))
-    else:
-        mc_mean = mc_std = 0
-        percentile = 0
-    
-    return {
-        'real_return': round(real_return, 2),
-        'mc_mean': round(mc_mean, 2),
-        'mc_std': round(mc_std, 2),
-        'mc_percentile': percentile,
-        # Save a small sample (first 10) of MC returns for display/debugging,
-        # rather than dumping all 500+ values into the output.
-        'returns': [round(r, 2) for r in mc_returns[:10]]
-    }
-```
+The reference implementation lives in [`test_cc_backtest.py::TestMsftTenYearRegression::test_monte_carlo_shuffle`](https://github.com/l3a0/covered-call-backtesting/blob/main/test_cc_backtest.py) — a test that re-runs the full shuffle on the bundled MSFT data (500 paths, `seed=42`, `__main__` params) and pins the resulting percentile, MC mean, and best-shuffled return. The algorithm in one line: compute daily returns from the real prices, shuffle their order with a fixed seed, rebuild a synthetic price path from each shuffled sequence, run the overlay backtest on each synthetic path, then compare the real ordered path's total return against the distribution.
 
 **Our result (`__main__` params on the bundled MSFT data, 500 shuffles, seed=42):**
 
@@ -1823,73 +1721,7 @@ def monte_carlo_shuffle(dates, prices, params, num_shuffles=1000):
 
 **Idea:** Unlike a grid search (which tries many combinations to find the *best* params), sensitivity analysis starts from already-chosen params and nudges *one at a time* to check *stability*. Grid search answers "what's optimal?" — sensitivity analysis answers "how fragile is that optimum?" If returns change drastically from a small tweak, you're overfitting that parameter. A robust strategy should stay in a similar range across small perturbations.
 
-```python
-def sensitivity_analysis(dates, prices, base_params, variations=None):
-    """
-    Test how strategy return changes with parameter variations.
-    
-    For each parameter, vary it by a fixed offset and measure impact
-    on strategy return. High sensitivity suggests overfitting.
-    
-    Args:
-        dates: list of trading dates
-        prices: list of closing prices
-        base_params: dict like {'call_delta': 0.25, 'close_at_pct': 0.75,
-                     'dte': 21, 'risk_free_rate': 0.045}
-        variations: dict of offsets to apply to each parameter
-                    e.g., {'call_delta': [-0.10, -0.05, 0, 0.05, 0.10]}
-    
-    Returns:
-        results: dict with returns for each parameter variation
-    """
-    if variations is None:
-        variations = {
-            'call_delta': [-0.10, -0.05, 0, 0.05, 0.10],
-            'dte': [-10, -5, 0, 5, 10],
-            'close_at_pct': [-0.20, -0.10, 0, 0.10, 0.20]
-        }
-    
-    results = {}
-    
-    for param_name in variations.keys():
-        if param_name not in base_params:
-            continue
-        
-        param_results = {}
-        base_value = base_params[param_name]
-        
-        for variation in variations[param_name]:
-            test_params = base_params.copy()
-            test_params[param_name] = base_value + variation
-            
-            # Skip invalid parameters
-            if param_name == 'call_delta' and test_params[param_name] < 0:
-                continue
-            if param_name == 'dte' and test_params[param_name] <= 0:
-                continue
-            if param_name == 'close_at_pct' and (test_params[param_name] <= 0 or test_params[param_name] > 1):
-                continue
-            
-            try:
-                summary, _, _ = run_cc_overlay(dates, prices, test_params)
-                label = f"{variation:+.2f}" if variation != 0 else "base"
-                param_results[label] = round(summary['total_return_pct'], 2)
-            except:
-                continue
-        
-        results[param_name] = param_results
-    
-    return results
-
-# Print the results
-results = sensitivity_analysis(dates, prices, base_params)
-for param, variations in results.items():
-    values = list(variations.values())
-    swing = max(values) - min(values)
-    print(f"{param} sensitivity:")
-    print("  " + "   ".join(f"{k}: {v}%" for k, v in variations.items()))
-    print(f"  Swing: {swing}% ({'sensitive' if swing > 50 else 'robust'})")
-```
+The reference implementation lives in [`test_cc_backtest.py::TestMsftTenYearRegression::test_sensitivity_perturbations`](https://github.com/l3a0/covered-call-backtesting/blob/main/test_cc_backtest.py) — a parameterized test that sweeps `call_delta` and `close_at_pct` at ±0.05 / ±0.10 / ±0.20 offsets from base and pins each variant's total return, plus asserts the worst drop from base stays under 10% (the "robust" verdict). The algorithm: hold all params fixed except one, vary that one by a small offset in both directions, measure each variant's total return, then compute the worst drop from base and the full-range swing.
 
 **Example output** (`__main__` params on the bundled MSFT data, run against the current engine):
 
@@ -2363,9 +2195,10 @@ Here's the complete process:
 *Overlay vs. buy-and-hold equity on the bundled MSFT data. The overlay finishes about $299K ahead. The gap is small through 2018, then widens through the 2019–2024 stretch and stays near $200–300K through the recent vol-heavy period — accumulating in the volatile middle years rather than in any single regime.*
 
 - ✅ Fixed params: ~945% total return on the bundled `$100K` configuration (final equity ~$1,045K; see Figure 1)
-- ✅ Monte Carlo: high percentile (real return beats randomized paths)
-- ✅ Sensitivity: small spread across `close_at_pct` settings (parameter is robust)
+- ✅ Monte Carlo: percentile 100 (real ordered path beats every one of 500 shuffled paths; max shuffled return ~934%)
+- ✅ Sensitivity: single-digit-% drops across both `call_delta` and `close_at_pct` perturbations
 - ✅ All regimes: bull, bear, sideways all profitable
+- ✅ Sharpe ratio vs cash (rf = 4.5%): ~1.12, vs buy-and-hold MSFT's ~0.72 over the same window — risk-adjusted *absolute* returns are strong
 - ⚠️ **Newey-West t-stat on excess returns: 0.58** (overlay's *excess* over buy-and-hold is not statistically distinguishable from zero on this single-stock 10-year sample; see Part 5). The dollar P&L is real, but the evidence for "the overlay specifically is adding value beyond holding MSFT" doesn't clear the statistical bar. This is what the literature on single-stock CC underperformance vs. index CC predicts.
 
 ### The Limitations We Haven't Solved
