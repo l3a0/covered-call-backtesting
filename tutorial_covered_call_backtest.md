@@ -374,67 +374,13 @@ In our backtest, we **don't have historical option prices**, so we can't extract
 
 In practice, we calculate **rolling historical volatility** and multiply by a **regime-dependent** factor — higher when vol is low (markets underpricing risk), lower when vol is already elevated (IV converges toward HV).
 
-```python
-import numpy as np
+The three helpers — `calc_rolling_volatility`, `detect_regime`, `estimate_iv` — are implemented in [`cc_backtest.py`](https://github.com/l3a0/covered-call-backtesting/blob/main/cc_backtest.py). Part 3 walks through both in detail (see *Rolling Historical Volatility* for the log-returns identity, Bessel's correction, and the √252 annualization derivation; see *The Dynamic IV Multiplier* for the regime → multiplier table). The skeleton in plain English:
 
-def rolling_volatility(prices, window=30):
-    """
-    Calculate rolling historical volatility using log returns.
-    Uses sample std dev (ddof=1) for unbiased estimation.
-    
-    Args:
-        prices: array of daily closing prices
-        window: lookback period (default 30 days)
-    
-    Returns:
-        volatilities: array of annualized volatilities
-    """
-    log_returns = np.diff(np.log(prices))
-    
-    # ddof=1 applies Bessel's correction: divide by (N-1) instead of N.
-    # Why: our 30-day window is a SAMPLE of returns drawn from the stock's
-    # true (unknown) return distribution, not the full population. Dividing
-    # by N systematically underestimates the true variance — intuitively,
-    # because the sample mean is computed from the same data, it "uses up"
-    # one degree of freedom, leaving only N-1 independent pieces of info.
-    # Dividing by N-1 corrects for this bias and gives an unbiased estimate
-    # of the true variance. For N=30 the correction is small (~3% larger
-    # std dev) but it's the statistically correct choice.
-    # Compute rolling std with a sliding window; this mirrors what the
-    # real `calc_rolling_volatility` in cc_backtest.py does, using only
-    # numpy (no pandas import needed for a simple sliding window).
-    rolling_std = np.array([
-        np.std(log_returns[i - window + 1 : i + 1], ddof=1)
-        if i >= window - 1 else np.nan
-        for i in range(len(log_returns))
-    ])
-    
-    # Annualize (multiply by sqrt(252) for daily data)
-    annualized_vol = rolling_std * np.sqrt(252)
-    
-    return annualized_vol
+- For each day, `rolling_vol = std_dev(last 30 log returns) × √252` (annualized).
+- Classify the regime: `"high"` if `rolling_vol > 25%`, `"low"` if `< 15%`, else `"normal"`.
+- Apply the multiplier: `iv_estimate = rolling_vol × {high: 1.1, normal: 1.3, low: 1.5}[regime]`.
 
-def detect_regime(hv):
-    """Classify current vol regime based on HV level."""
-    if hv > 0.25:
-        return 'high'
-    elif hv < 0.15:
-        return 'low'
-    return 'normal'
-
-def estimate_iv(hv):
-    """Apply regime-based multiplier to convert HV → IV estimate."""
-    regime = detect_regime(hv)
-    mult = {'high': 1.1, 'normal': 1.3, 'low': 1.5}[regime]
-    return hv * mult
-
-# Example
-closing_prices = np.array([100, 101, 99, 102, 98, ...])  # daily closes
-hv = rolling_volatility(closing_prices, window=30)
-
-# Adjust for IV: regime-based multiplier
-iv = np.array([estimate_iv(h) for h in hv])
-```
+In the production engine `estimate_iv(rolling_vol)` does steps 2 and 3 together — pass it a vol, get back an IV estimate.
 
 **Why these multipliers?**
 
