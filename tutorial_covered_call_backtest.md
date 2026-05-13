@@ -296,7 +296,7 @@ We work **backwards** from delta:
 
 This is called a **grid search**. It checks every whole-dollar strike in a range and picks the one whose delta is closest to the target. With only ~30–50 candidates to check, it runs instantly — and it naturally returns whole-dollar strikes that match real option chains.
 
-The production implementation is [`cc_backtest.py::find_strike_for_delta`](https://github.com/l3a0/covered-call-backtesting/blob/main/cc_backtest.py). It scans whole-dollar strikes in `[0.80·S, 1.02·S]` for puts and `[0.98·S, 1.25·S]` for calls — the asymmetric ranges cover the relevant out-of-the-money zone for each option type while keeping the candidate count small. For each candidate it calls `bs_delta(...)` and tracks the strike whose computed delta is closest to `target_delta`.
+The production implementation is [`cc_backtest.py::find_strike_for_delta`](https://github.com/l3a0/covered-call-backtesting/blob/main/cc_backtest.py#L84). It scans whole-dollar strikes in `[0.80·S, 1.02·S]` for puts and `[0.98·S, 1.25·S]` for calls — the asymmetric ranges cover the relevant out-of-the-money zone for each option type while keeping the candidate count small. For each candidate it calls `bs_delta(...)` and tracks the strike whose computed delta is closest to `target_delta`.
 
 **Example run:**
 
@@ -307,7 +307,7 @@ The production implementation is [`cc_backtest.py::find_strike_for_delta`](https
 
 ### Code Walkthrough: bs_price(), bs_delta(), find_strike_for_delta()
 
-The full Black-Scholes toolkit — `normal_pdf`, `normal_cdf`, `bs_price`, `bs_delta`, and `find_strike_for_delta` — lives in [`cc_backtest.py`'s section 1](https://github.com/l3a0/covered-call-backtesting/blob/main/cc_backtest.py). What each one does:
+The full Black-Scholes toolkit — `normal_pdf`, `normal_cdf`, `bs_price`, `bs_delta`, and `find_strike_for_delta` — lives in [`cc_backtest.py`'s section 1](https://github.com/l3a0/covered-call-backtesting/blob/main/cc_backtest.py#L12). What each one does:
 
 | Function | What it computes |
 | --- | --- |
@@ -374,7 +374,7 @@ In our backtest, we **don't have historical option prices**, so we can't extract
 
 In practice, we calculate **rolling historical volatility** and multiply by a **regime-dependent** factor — higher when vol is low (markets underpricing risk), lower when vol is already elevated (IV converges toward HV).
 
-The three helpers — `calc_rolling_volatility`, `detect_regime`, `estimate_iv` — are implemented in [`cc_backtest.py`](https://github.com/l3a0/covered-call-backtesting/blob/main/cc_backtest.py). Part 3 walks through both in detail (see *Rolling Historical Volatility* for the log-returns identity, Bessel's correction, and the √252 annualization derivation; see *The Dynamic IV Multiplier* for the regime → multiplier table). The skeleton in plain English:
+The three helpers — [`calc_rolling_volatility`](https://github.com/l3a0/covered-call-backtesting/blob/main/cc_backtest.py#L127), [`detect_regime`](https://github.com/l3a0/covered-call-backtesting/blob/main/cc_backtest.py#L182), and [`estimate_iv`](https://github.com/l3a0/covered-call-backtesting/blob/main/cc_backtest.py#L191) — are implemented in `cc_backtest.py`. Part 3 walks through both in detail (see *Rolling Historical Volatility* for the log-returns identity, Bessel's correction, and the √252 annualization derivation; see *The Dynamic IV Multiplier* for the regime → multiplier table). The skeleton in plain English:
 
 - For each day, `rolling_vol = std_dev(last 30 log returns) × √252` (annualized).
 - Classify the regime: `"high"` if `rolling_vol > 25%`, `"low"` if `< 15%`, else `"normal"`.
@@ -626,11 +626,11 @@ We use a simple regime-based IV multiplier. `detect_regime(rolling_vol)` classif
 | **Normal** | 15–25% | 1.3× | Typical HV-to-IV adjustment in calm markets. |
 | **Low** | < 15% | 1.5× | IV is suppressed; expect mean reversion to higher values. |
 
-Implementations: [`cc_backtest.py::detect_regime`](https://github.com/l3a0/covered-call-backtesting/blob/main/cc_backtest.py) and [`::estimate_iv`](https://github.com/l3a0/covered-call-backtesting/blob/main/cc_backtest.py).
+Implementations: [`cc_backtest.py::detect_regime`](https://github.com/l3a0/covered-call-backtesting/blob/main/cc_backtest.py#L182) and [`::estimate_iv`](https://github.com/l3a0/covered-call-backtesting/blob/main/cc_backtest.py#L191).
 
 ### Rolling Historical Volatility: 30-Day Window, Log Returns, Annualize
 
-The implementation is [`cc_backtest.py::calc_rolling_volatility`](https://github.com/l3a0/covered-call-backtesting/blob/main/cc_backtest.py) — for each price index, it computes the standard deviation of the last `window` log returns and annualizes by `√252`.
+The implementation is [`cc_backtest.py::calc_rolling_volatility`](https://github.com/l3a0/covered-call-backtesting/blob/main/cc_backtest.py#L127) — for each price index, it computes the standard deviation of the last `window` log returns and annualizes by `√252`.
 
 Four pedagogical notes worth pulling out, because they show up in every volatility-related calculation in this codebase:
 
@@ -696,7 +696,7 @@ if trend_filter_enabled and not is_uptrend(prices):
 
 ### The Run_cc_overlay() Function: Full Walkthrough
 
-The core backtesting engine lives in [`cc_backtest.py::run_cc_overlay`](https://github.com/l3a0/covered-call-backtesting/blob/main/cc_backtest.py). It's heavily commented and small enough to read end-to-end. Function signature:
+The core backtesting engine lives in [`cc_backtest.py::run_cc_overlay`](https://github.com/l3a0/covered-call-backtesting/blob/main/cc_backtest.py#L222). It's heavily commented and small enough to read end-to-end. Function signature:
 
 ```python
 def run_cc_overlay(
@@ -862,7 +862,7 @@ def param_combinations(grid):
 
 ### How to Stitch Out-of-Sample Results into a Single Equity Curve
 
-The implementation is [`cc_backtest.py::walk_forward_optimization`](https://github.com/l3a0/covered-call-backtesting/blob/main/cc_backtest.py). Signature:
+The implementation is [`cc_backtest.py::walk_forward_optimization`](https://github.com/l3a0/covered-call-backtesting/blob/main/cc_backtest.py#L785). Signature:
 
 ```python
 def walk_forward_optimization(
@@ -885,7 +885,7 @@ What it does per iteration:
 3. Run those locked params on the out-of-sample test window. Append the resulting daily equity to the stitched curve.
 4. Advance `current_date` by `roll_months` and repeat until the next test window would run past `end_date`.
 
-The production implementation in [`cc_backtest.py::walk_forward_optimization`](https://github.com/l3a0/covered-call-backtesting/blob/main/cc_backtest.py) is heavily commented — it carries the teaching content (window arithmetic diagram, boolean-indexing explainer, Sharpe-built-inside-out walkthrough, Bessel's correction, √252 annualization derivation, "rules are LOCKED — no re-tuning" emphasis) right next to the code that does the work. The fixing test [`test_cc_backtest.py::TestMsftTenYearRegression::test_walk_forward_optimization`](https://github.com/l3a0/covered-call-backtesting/blob/main/test_cc_backtest.py) pins the 15 walk-forward periods, the most-chosen parameters, and the cumulative OOS compound return on the bundled MSFT data.
+The production implementation in [`cc_backtest.py::walk_forward_optimization`](https://github.com/l3a0/covered-call-backtesting/blob/main/cc_backtest.py#L785) is heavily commented — it carries the teaching content (window arithmetic diagram, boolean-indexing explainer, Sharpe-built-inside-out walkthrough, Bessel's correction, √252 annualization derivation, "rules are LOCKED — no re-tuning" emphasis) right next to the code that does the work. The fixing test [`test_cc_backtest.py::TestMsftTenYearRegression::test_walk_forward_optimization`](https://github.com/l3a0/covered-call-backtesting/blob/main/test_cc_backtest.py#L1210) pins the 15 walk-forward periods, the most-chosen parameters, and the cumulative OOS compound return on the bundled MSFT data.
 
 ### What the Optimizer Chose
 
@@ -979,7 +979,7 @@ If no → the strategy exploits a specific *sequence* of returns (could be luck)
 
 **Why this works:** Real prices have a specific order — trends, mean-reversion, volatility clusters. Shuffling destroys that order while keeping the exact same set of daily returns (same mean, same volatility, same distribution). So if your strategy profits on both real and shuffled paths, it's capturing **statistical properties** of the returns (e.g., collecting premium in a volatile market) — those survive shuffling. But if it only works on the real path, it was exploiting the **specific sequence** — like selling calls right before drops and not selling before rallies. That pattern won't repeat, so it's likely overfitting or luck. Think of it like poker: if you win with many random deals, you have real skill. If you only win with the exact hand order you practiced on, you just memorized that deck.
 
-The reference implementation lives in [`test_cc_backtest.py::TestMsftTenYearRegression::test_monte_carlo_shuffle`](https://github.com/l3a0/covered-call-backtesting/blob/main/test_cc_backtest.py) — a test that re-runs the full shuffle on the bundled MSFT data (500 paths, `seed=42`, `__main__` params) and pins the resulting percentile, MC mean, and best-shuffled return. The algorithm in one line: compute daily returns from the real prices, shuffle their order with a fixed seed, rebuild a synthetic price path from each shuffled sequence, run the overlay backtest on each synthetic path, then compare the real ordered path's total return against the distribution.
+The reference implementation lives in [`test_cc_backtest.py::TestMsftTenYearRegression::test_monte_carlo_shuffle`](https://github.com/l3a0/covered-call-backtesting/blob/main/test_cc_backtest.py#L1029) — a test that re-runs the full shuffle on the bundled MSFT data (500 paths, `seed=42`, `__main__` params) and pins the resulting percentile, MC mean, and best-shuffled return. The algorithm in one line: compute daily returns from the real prices, shuffle their order with a fixed seed, rebuild a synthetic price path from each shuffled sequence, run the overlay backtest on each synthetic path, then compare the real ordered path's total return against the distribution.
 
 **Our result (`__main__` params on the bundled MSFT data, 500 shuffles, seed=42):**
 
@@ -994,7 +994,7 @@ The reference implementation lives in [`test_cc_backtest.py::TestMsftTenYearRegr
 
 **Idea:** Unlike a grid search (which tries many combinations to find the *best* params), sensitivity analysis starts from already-chosen params and nudges *one at a time* to check *stability*. Grid search answers "what's optimal?" — sensitivity analysis answers "how fragile is that optimum?" If returns change drastically from a small tweak, you're overfitting that parameter. A robust strategy should stay in a similar range across small perturbations.
 
-The reference implementation lives in [`test_cc_backtest.py::TestMsftTenYearRegression::test_sensitivity_perturbations`](https://github.com/l3a0/covered-call-backtesting/blob/main/test_cc_backtest.py) — a parameterized test that sweeps `call_delta` and `close_at_pct` at ±0.05 / ±0.10 / ±0.20 offsets from base and pins each variant's total return, plus asserts the worst drop from base stays under 10% (the "robust" verdict). The algorithm: hold all params fixed except one, vary that one by a small offset in both directions, measure each variant's total return, then compute the worst drop from base and the full-range swing.
+The reference implementation lives in [`test_cc_backtest.py::TestMsftTenYearRegression::test_sensitivity_perturbations`](https://github.com/l3a0/covered-call-backtesting/blob/main/test_cc_backtest.py#L977) — a parameterized test that sweeps `call_delta` and `close_at_pct` at ±0.05 / ±0.10 / ±0.20 offsets from base and pins each variant's total return, plus asserts the worst drop from base stays under 10% (the "robust" verdict). The algorithm: hold all params fixed except one, vary that one by a small offset in both directions, measure each variant's total return, then compute the worst drop from base and the full-range swing.
 
 **Example output** (`__main__` params on the bundled MSFT data, run against the current engine):
 
@@ -1036,7 +1036,7 @@ Math behind the close_at_pct sensitivity:
 
 **Idea:** Classify each day as bull, bear, or sideways, then bucket the overlay's trade P&L by regime. If most of the income comes from one regime, the strategy isn't actually market-neutral.
 
-The implementations are [`cc_backtest.py::classify_regime`](https://github.com/l3a0/covered-call-backtesting/blob/main/cc_backtest.py) and [`::regime_analysis`](https://github.com/l3a0/covered-call-backtesting/blob/main/cc_backtest.py). `classify_regime` looks at where the last price sits relative to its trailing 200-day SMA — `bull` if it's >5% above, `bear` if >5% below, `sideways` if within the band, `unknown` for the first 199 days when there aren't enough observations yet. `regime_analysis` runs the classifier at each day (using only past prices — no future peeking) and sums each closed trade's P&L into the regime active on its close date.
+The implementations are [`cc_backtest.py::classify_regime`](https://github.com/l3a0/covered-call-backtesting/blob/main/cc_backtest.py#L634) and [`::regime_analysis`](https://github.com/l3a0/covered-call-backtesting/blob/main/cc_backtest.py#L671). `classify_regime` looks at where the last price sits relative to its trailing 200-day SMA — `bull` if it's >5% above, `bear` if >5% below, `sideways` if within the band, `unknown` for the first 199 days when there aren't enough observations yet. `regime_analysis` runs the classifier at each day (using only past prices — no future peeking) and sums each closed trade's P&L into the regime active on its close date.
 
 **Our result** (`__main__` params on the bundled MSFT data, pinned by `test_regime_analysis`):
 
@@ -1177,7 +1177,7 @@ The intuition transfers nicely. If your data has long memory (momentum factors, 
 
 #### The Code
 
-The full implementation is [`cc_backtest.py::compute_statistics`](https://github.com/l3a0/covered-call-backtesting/blob/main/cc_backtest.py). Signature:
+The full implementation is [`cc_backtest.py::compute_statistics`](https://github.com/l3a0/covered-call-backtesting/blob/main/cc_backtest.py#L517). Signature:
 
 ```python
 def compute_statistics(
