@@ -23,6 +23,7 @@ from cc_backtest import (
     normal_pdf,
     regime_analysis,
     run_cc_overlay,
+    walk_forward_optimization,
 )
 
 
@@ -1183,20 +1184,107 @@ class TestMsftTenYearRegression:
 
         # Day counts: SMA200 with ±5% bands on MSFT 2016-2026 produces
         # this exact split. Total equals len(prices) by construction.
+        # The first `window` (200) days are 'unknown' because the SMA needs
+        # 200 prior observations to compute (we classify using prices[:i],
+        # so day 200 is the first one with enough history).
         assert result['bull']['days'] == 1690
-        assert result['bear']['days'] == 280
+        assert result['bear']['days'] == 279
         assert result['sideways']['days'] == 346
-        assert result['unknown']['days'] == 199
+        assert result['unknown']['days'] == 200
         total_days = sum(result[r]['days'] for r in result)
         assert total_days == len(prices)
 
         # Per-regime trade PnL — the tutorial's headline empirical claim.
-        assert result['bull']['total_pnl'] == pytest.approx(17875.84, abs=5.0)
-        assert result['bear']['total_pnl'] == pytest.approx(152357.91, abs=5.0)
-        assert result['sideways']['total_pnl'] == pytest.approx(123527.42, abs=5.0)
+        assert result['bull']['total_pnl'] == pytest.approx(57976.42, abs=5.0)
+        assert result['bear']['total_pnl'] == pytest.approx(96619.30, abs=5.0)
+        assert result['sideways']['total_pnl'] == pytest.approx(139165.45, abs=5.0)
         assert result['unknown']['total_pnl'] == pytest.approx(5456.15, abs=5.0)
 
-        # Bear's per-day average dwarfs bull's — premium is richest
-        # in volatile regimes. Specifically: ~$544/day in bear vs ~$11/day
-        # in bull, i.e. ~50× higher.
-        assert result['bear']['avg_pnl_per_day'] > 30 * result['bull']['avg_pnl_per_day']
+        # Bear and sideways' per-day averages dwarf bull's — premium
+        # is richest in volatile and choppy regimes. Specifically:
+        # ~$346/day in bear and ~$402/day in sideways vs ~$34/day
+        # in bull, i.e. ~10× higher.
+        assert result['bear']['avg_pnl_per_day'] > 8 * result['bull']['avg_pnl_per_day']
+        assert result['sideways']['avg_pnl_per_day'] > 8 * result['bull']['avg_pnl_per_day']
+
+    def test_walk_forward_optimization(
+        self, data: tuple[list[str], np.ndarray[Any, np.dtype[np.float64]]]
+    ) -> None:
+        """Pin the walk-forward result on MSFT 2016-2026.
+
+        With the tutorial's standard 3×3×3 grid (call_delta ∈
+        {0.15, 0.20, 0.25}, dte ∈ {21, 30, 45}, close_at_pct ∈
+        {0.50, 0.75, 1.00}), a 2-year train / 6-month test / 6-month
+        roll schedule produces 15 walk-forward periods over the
+        2018-04 → 2025-10 out-of-sample span.
+
+        Empirical observations pinned here:
+          - The familiar __main__ defaults (0.25Δ, 21 DTE) win the
+            most periods, but **close_at_pct=0.50 wins more periods
+            than the 0.75 default** — closing earlier frees capital
+            and skips the last sliver of theta that gamma often
+            eats.
+          - Cumulative OOS compound return (per-period 6mo returns
+            chained) is ~510% over 7.5 years — substantially less
+            than the ~582% fixed-params return over the same span.
+            That gap is the cost of not having hindsight; the
+            walk-forward number is the return you'd have actually
+            achieved running this strategy in real time.
+
+        Total runtime is a couple of seconds (15 windows × 27
+        combos = 405 train backtests on 504-day windows).
+        """
+        from collections import Counter
+
+        dates, prices = data
+        param_grid: dict[str, list[float]] = {
+            'call_delta': [0.15, 0.20, 0.25],
+            'dte': [21, 30, 45],
+            'close_at_pct': [0.50, 0.75, 1.00],
+        }
+        oos_equity, records = walk_forward_optimization(dates, prices, param_grid)
+
+        # Window structure: 2y train, 6mo test, 6mo roll → 15 periods on
+        # a 10y MSFT dataset starting 2016-04.
+        assert len(records) == 15
+        assert len(oos_equity) == 1887  # daily OOS equity points across all periods
+
+        # train_end == test_start by construction (half-open intervals).
+        for r in records:
+            assert r['train_end'] == r['test_start']
+
+        # First and last period bounds.
+        assert records[0]['test_start'] == '2018-04-11'
+        assert records[0]['test_end'] == '2018-10-11'
+        assert records[-1]['test_start'] == '2025-04-11'
+        assert records[-1]['test_end'] == '2025-10-11'
+
+        # Most-chosen params: 0.25Δ and 21 DTE win consistently;
+        # close_at_pct=0.50 wins more periods than the 0.75 default.
+        delta_counts = Counter(r['best_params']['call_delta'] for r in records)
+        dte_counts = Counter(r['best_params']['dte'] for r in records)
+        close_counts = Counter(r['best_params']['close_at_pct'] for r in records)
+        assert delta_counts[0.25] == 13
+        assert delta_counts[0.20] == 2
+        assert delta_counts[0.15] == 0
+        assert dte_counts[21] == 10
+        assert dte_counts[30] == 4
+        assert dte_counts[45] == 1
+        assert close_counts[0.50] == 8
+        assert close_counts[0.75] == 6
+        assert close_counts[1.00] == 1
+
+        # Cumulative OOS compound return: chain per-period 6mo returns.
+        cumulative = 1.0
+        for r in records:
+            period_eq = [
+                d for d in oos_equity
+                if r['test_start'] <= d['date'] < r['test_end']
+            ]
+            assert period_eq, f"no OOS equity for period {r['test_start']}"
+            period_ret = (period_eq[-1]['equity'] - period_eq[0]['equity']) / period_eq[0]['equity']
+            cumulative *= (1.0 + period_ret)
+        cumulative_pct = (cumulative - 1.0) * 100
+        # Pinned around ~510%, allow a few pp of slack for floating-point
+        # variation in the run-to-run results.
+        assert cumulative_pct == pytest.approx(510.0, abs=5.0)

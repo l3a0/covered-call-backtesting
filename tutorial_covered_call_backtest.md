@@ -916,164 +916,44 @@ def param_combinations(grid):
 
 ### How to Stitch Out-of-Sample Results into a Single Equity Curve
 
+The implementation is [`cc_backtest.py::walk_forward_optimization`](https://github.com/l3a0/covered-call-backtesting/blob/main/cc_backtest.py). Signature:
+
 ```python
 def walk_forward_optimization(
-    dates, prices, param_grid, 
-    train_years=2, test_months=6, roll_months=6
-):
-    """
-    Walk-forward optimization for covered call strategy.
-    
-    Args:
-        dates: array of dates
-        prices: array of prices
-        param_grid: dict of parameter combinations to test
-        train_years: years of data to train on
-        test_months: months of data to test on
-        roll_months: how far to shift window forward
-    
-    Returns:
-        results: combined out-of-sample equity curve
-        best_params_per_period: which params won in each train window
-    """
-    
-    # Convert to pandas for easier date slicing
-    import pandas as pd
-    df = pd.DataFrame({'date': dates, 'price': prices})
-    df['date'] = pd.to_datetime(df['date'])
-    
-    all_results = []
-    best_params_per_period = []
-    
-    # First date in dataset (e.g., Apr 2014)
-    start_date = df['date'].min()
-    # Last date in dataset (e.g., Apr 2026)
-    end_date = df['date'].max()
-    # The "knife" between train and test.
-    # We start train_years in so there's enough history for the first training window.
-    # Example: start_date = Apr 2014, train_years = 2 → current_date = Apr 2016
-    current_date = start_date + pd.DateOffset(years=train_years)
-    
-    # Keep rolling as long as there's enough data left for a complete test window.
-    # If the test window would run past end_date, stop — no partial test periods.
-    while current_date + pd.DateOffset(months=test_months) <= end_date:
-        
-        # current_date carves out two non-overlapping windows each iteration:
-        #   train_start ←— train_years —→ train_end/test_start ←— test_months —→ test_end
-        #                                       ↑ current_date
-        #
-        # Iter 1: [Apr 2014 – Apr 2016] train → [Apr 2016 – Oct 2016] test
-        # Iter 2: [Oct 2014 – Oct 2016] train → [Oct 2016 – Apr 2017] test
-        # Iter 3: [Apr 2015 – Apr 2017] train → [Apr 2017 – Oct 2017] test
-        
-        # Look BACKWARD
-        train_start = current_date - pd.DateOffset(years=train_years)
-        train_end = current_date
-        # Look FORWARD
-        test_start = current_date
-        test_end = current_date + pd.DateOffset(months=test_months)
-        # train_end == test_start: windows touch but never overlap.
-        # This is the key guarantee — we never test on data we trained on.
-        
-        # Slice the dataframe into train/test sets using boolean indexing:
-        #   df['date'] >= train_start  → True/False for every row (is this date on or after start?)
-        #   df['date'] < train_end     → True/False for every row (is this date before end?)
-        #   &                          → combine: only rows where BOTH are True
-        #   df[...]                    → keep only those True rows
-        #
-        # We use >= (inclusive) on the left and < (exclusive) on the right so that
-        # the boundary date (current_date) belongs to the TEST set, not both.
-        # Example: if current_date = Apr 2016, then Apr 2016 data goes to test_df,
-        #          not train_df. No row appears in both sets.
-        train_df = df[(df['date'] >= train_start) & (df['date'] < train_end)]
-        test_df = df[(df['date'] >= test_start) & (df['date'] < test_end)]
-        
-        # === Step 1: OPTIMIZE on training data ("study for the test") ===
-        best_sharpe = -float('inf')  # Initialize to negative infinity so any real Sharpe beats it
-        best_params = None
-        
-        for params in param_combinations(param_grid):
-            params.update({                    # Fixed params that don't change across combos
-                'risk_free_rate': 0.045,       # Current risk-free rate (~T-bill yield)
-                # IV multiplier is now regime-based (detect_regime + estimate_iv),
-                # so we don't need to pass iv_multiplier here.
-            })
-            
-            summary, trades, daily_eq = run_cc_overlay(  # Run backtest with these params
-                train_df['date'].values,
-                train_df['price'].values,
-                params
-            )
-            
-            returns = []
-            for i in range(1, len(daily_eq)):
-                daily_return = (daily_eq[i]['equity'] - daily_eq[i-1]['equity']) / daily_eq[i-1]['equity']
-                returns.append(daily_return)
-            
-            if returns:
-                # 1. Average daily return: sum all daily returns, divide by count
-                avg_return = sum(returns) / len(returns)
-                
-                # 2. Standard deviation (how bumpy the ride is), built inside-out:
-                #    (r - avg_return)          → each day's deviation from the mean
-                #    (r - avg_return) ** 2     → square it (so negatives don't cancel positives)
-                #    sum(...)                  → total squared deviation
-                #    / max(1, len(returns)-1)  → divide by N-1 (Bessel's correction: less biased
-                #                                estimate from a sample vs. full population;
-                #                                max(1,...) is a safety net against dividing by 0)
-                #    math.sqrt(...)            → undo the squaring, back to return-sized units
-                std_dev = math.sqrt(
-                    sum((r - avg_return) ** 2 for r in returns) / max(1, len(returns) - 1)
-                )
-                
-                # 3. Sharpe ratio: reward per unit of risk, annualized
-                #    avg_return / std_dev      → daily Sharpe (return per unit of bumpiness)
-                #    * math.sqrt(252)          → annualize it. Returns scale with time, but
-                #                                volatility scales with sqrt(time), so
-                #                                daily Sharpe × √252 = annual Sharpe.
-                #    Sharpe guide: <0 losing money, 0.5–1.0 decent, 1.0–2.0 strong, >2.0 suspicious
-                sharpe = (avg_return / std_dev) * math.sqrt(252) if std_dev > 0 else 0
-            else:
-                sharpe = -float('inf')  # No returns data → treat as worst possible
-            
-            if sharpe > best_sharpe:  # Keep the best-performing parameter set
-                best_sharpe = sharpe
-                best_params = params
-        
-        best_params_per_period.append({  # Record what the optimizer chose for this period
-            'train_period': (train_start, train_end),
-            'test_period': (test_start, test_end),
-            'best_params': best_params,
-            'train_sharpe': best_sharpe,
-        })
-        
-        # === Step 2: TEST on out-of-sample data (rules are LOCKED — no re-tuning) ===
-        summary, trades, daily_eq = run_cc_overlay(
-            test_df['date'].values,
-            test_df['price'].values,
-            best_params  # Same params from training — this is the honest score
-        )
-        
-        all_results.extend(daily_eq)  # Collect OOS equity curves to stitch together later
-        
-        # === Step 3: ROLL FORWARD ===
-        current_date += pd.DateOffset(months=roll_months)  # Slide both windows forward
-            # Next iteration trains on newer data and tests on the next unseen chunk
-    
-    return all_results, best_params_per_period
+    dates: list[str],
+    prices: NDArray[np.floating[Any]] | list[float],
+    param_grid: dict[str, list[float]],
+    fixed_params: dict[str, float] | None = None,
+    train_years: int = 2,
+    test_months: int = 6,
+    roll_months: int = 6,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
 ```
 
-### What the Optimizer Chose: 0.25Δ, 21 DTE, 75% Close, No Trend Filter
+The function takes the price series, a parameter grid (dict mapping parameter name to candidate values), and the window-sizing knobs. It returns `(oos_equity, period_records)` — the stitched out-of-sample daily equity curve, and a list of dicts describing each iteration's train/test bounds (ISO date strings), the chosen `best_params`, and the in-sample training Sharpe that won.
 
-After running walk-forward on 2016–2026 MSFT data, the optimizer consistently chose:
+What it does per iteration:
 
-| Parameter | Value | Meaning |
+1. Slice `[train_start, train_end)` and `[test_start, test_end)` from the date series. The half-open intervals guarantee the boundary date `current_date` belongs to exactly one window — `test_start == train_end`, never both. This is the central guard against in-sample overfitting: the parameters evaluated on a test window are chosen *without ever seeing* that test window's data.
+2. Loop over every combination from `param_grid`. For each combo, run the overlay on the training window and compute the annualized Sharpe of daily returns (`mean / std × √252`). Keep the highest-Sharpe combo.
+3. Run those locked params on the out-of-sample test window. Append the resulting daily equity to the stitched curve.
+4. Advance `current_date` by `roll_months` and repeat until the next test window would run past `end_date`.
+
+The production implementation in [`cc_backtest.py::walk_forward_optimization`](https://github.com/l3a0/covered-call-backtesting/blob/main/cc_backtest.py) is heavily commented — it carries the teaching content (window arithmetic diagram, boolean-indexing explainer, Sharpe-built-inside-out walkthrough, Bessel's correction, √252 annualization derivation, "rules are LOCKED — no re-tuning" emphasis) right next to the code that does the work. The fixing test [`test_cc_backtest.py::TestMsftTenYearRegression::test_walk_forward_optimization`](https://github.com/l3a0/covered-call-backtesting/blob/main/test_cc_backtest.py) pins the 15 walk-forward periods, the most-chosen parameters, and the cumulative OOS compound return on the bundled MSFT data.
+
+### What the Optimizer Chose
+
+Running walk-forward on the bundled MSFT data with the 3×3×3 grid produces 15 OOS test periods. The optimizer's choices per period (pinned by `test_walk_forward_optimization`):
+
+| Parameter | Most-chosen value | Counts across 15 periods |
 | --- | --- | --- |
-| **call_delta** | 0.25 | Sell at the 25% ITM strike (balanced risk/reward) |
-| **dte** | 21 | Sell with 21 days to expiration (monthly rhythm) |
-| **close_at_pct** | 0.75 | Close when 75% of premium captured (let winners run) |
+| **call_delta** | **0.25** | 0.25 × 13, 0.20 × 2, 0.15 × 0 |
+| **dte** | **21** | 21 × 10, 30 × 4, 45 × 1 |
+| **close_at_pct** | **0.50** | 0.50 × 8, 0.75 × 6, 1.00 × 1 |
 
-**Why does this make sense?**
+The first two match the `__main__` defaults: `0.25Δ` and `21 DTE` win in the large majority of periods. The third is a surprise — **`close_at_pct=0.50` wins more periods than the `0.75` default**. Closing at 50% of premium captured (rather than 75%) frees capital faster and skips the last sliver of theta that often gets eaten by gamma anyway.
+
+**Why these defaults make sense:**
 
 1. **0.25Δ** is the sweet spot:
    - Conservative (0.15Δ) misses too much premium
@@ -1085,10 +965,9 @@ After running walk-forward on 2016–2026 MSFT data, the optimizer consistently 
    - Gives enough time for the trade to work out
    - Allows 4–5 cycles per year for reinvesting premiums
 
-3. **75% profit target** lets winners run:
-   - Close when the option has lost 75% of its value (buy back for 25% of what you sold it for)
-   - Captures most of the time decay without waiting until the very end
-   - Frees up capital to sell the next call sooner
+3. **50% profit target** beats holding longer:
+   - On this data, the optimizer prefers closing earlier — the last 25% of theta tends to come with high gamma risk, and freeing capital sooner lets you start the next cycle
+   - The `__main__` default is 0.75 (more conservative); walk-forward suggests 0.50 may leave less on the table per cycle while keeping capital busier
 
 4. **Deep-ITM close at delta > 0.70** caps assignment damage:
    - When the call goes deep ITM, gamma is steep and a small adverse move can wipe out months of premium income
@@ -1099,30 +978,20 @@ After running walk-forward on 2016–2026 MSFT data, the optimizer consistently 
    - Premiums are richest during downtrends (high vol), so that's when call selling is most rewarding
    - A trend filter mainly helps the CSP phase (avoid selling puts into a falling market), but the backtest found it wasn't worth the complexity
 
-### The Key Finding: Walk-Forward Outperformed Fixed Params
+### The Key Finding: Walk-Forward Tells the Honest Story
 
-**Result:**
+**Result on the bundled MSFT data, over the walk-forward span (2018-04 → 2025-10):**
 
-- **Fixed params (0.25Δ, 21 DTE, 75% close, no filter) on all 10 years:** ~945% total return on the bundled `$100K capital` configuration (final equity ~$1,045K — see Figure 1 in Part 6).
-- **Walk-forward (params optimized per period) on out-of-sample:** typically outperforms fixed params by 10–15%
+- **Walk-forward** (params optimized per period, 6-month OOS windows chained): **~510%** cumulative compound return.
+- **Fixed params** (`0.25Δ`, `21 DTE`, `0.75 close`) over the same span: **~582%** total return.
 
-> **Note on return measurement:** Returns are measured against the cost basis of 100 shares (1 contract), not against a separate cash reserve. This is the natural denominator for a covered call overlay — the return on the stock position including premium income.
+Walk-forward **underperformed** fixed-params by about 72 percentage points (~12% relative). That sounds bad until you notice what the fixed-params number actually represents: the return *given that you somehow knew, before seeing any of this data, that those exact three parameters would be the winners on this 7.5-year window*.
 
-**Interpretation:**
-Walk-forward adaptive parameters beat static parameters. This is a **good sign** — it means the strategy is responsive to changing market conditions, not overfit.
+The walk-forward number is the return you'd have actually achieved running this strategy in real time, with no peeking. The gap is the cost of not having hindsight — which is to say, the realistic expected return.
 
-### Code Walkthrough of the Walk-Forward Loop
+**The pedagogical point isn't "walk-forward gets you a better number."** It's the opposite: **fixed-params backtests systematically overestimate the strategy's return; walk-forward gives you the number you'd actually have achieved**. If you see a strategy that "outperforms" in a single full-period backtest, walk-forward will often pull the headline number lower — that's the methodology working, not failing.
 
-See above for the full code. Key steps:
-
-1. **Define windows:** Start with 2-year training, 6-month testing, roll every 6 months
-2. **For each window:**
-   - Extract training and test data
-   - Try all parameter combinations on training data
-   - Pick the best (highest Sharpe ratio)
-   - Run that parameter set on test data
-   - Stitch results into combined equity curve
-3. **Evaluate:** Average returns, volatility, and Sharpe ratio on out-of-sample results
+This also clarifies the right reading of the headline 945% number reported elsewhere in this tutorial. That number is the fixed-params total return over the *full* 10-year MSFT sample (2016 → 2026), which includes 2 extra years on either side of the walk-forward span. The 510% / 582% comparison above is the apples-to-apples one inside the walk-forward window.
 
 ### Common Mistake: Optimizing on Too Many Parameters (Overfitting the Grid)
 
@@ -1227,12 +1096,12 @@ The implementations are [`cc_backtest.py::classify_regime`](https://github.com/l
 
 | Regime | Days | Total P&L | Avg P&L/day |
 | --- | ---: | ---: | ---: |
-| Bull | 1,690 | $17,876 | $10.58 |
-| Bear | 280 | $152,358 | $544.14 |
-| Sideways | 346 | $123,527 | $357.02 |
-| Unknown (first 199 days) | 199 | $5,456 | $27.42 |
+| Bull | 1,690 | $57,976 | $34.31 |
+| Bear | 279 | $96,619 | $346.31 |
+| Sideways | 346 | $139,165 | $402.21 |
+| Unknown (first 200 days) | 200 | $5,456 | $27.28 |
 
-**Interpretation:** Bear and sideways regimes produce **about 50× the per-day premium** of bull regimes, even though bull days dominate the day count (1,690 out of 2,515). Two things drive this: (1) volatility is higher in non-bull regimes, so option premium per trade is richer; (2) more positions hit their profit target or assignment threshold when the stock isn't grinding steadily upward. The strategy is structurally defensive — it earns most of its keep when the market is anything other than a one-way bull. That's the point of selling vol.
+**Interpretation:** Bear and sideways regimes produce **roughly 10× the per-day premium** of bull regimes, even though bull days dominate the day count (1,690 out of 2,515). Two things drive this: (1) volatility is higher in non-bull regimes, so option premium per trade is richer; (2) more positions hit their profit target or assignment threshold when the stock isn't grinding steadily upward. The strategy is structurally defensive — it earns most of its keep when the market is anything other than a one-way bull. That's the point of selling vol.
 
 ### Common Mistake: Only Testing in Bull Markets
 
