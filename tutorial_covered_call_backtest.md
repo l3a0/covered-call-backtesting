@@ -928,16 +928,16 @@ The first two match the `__main__` defaults: `0.25Δ` and `21 DTE` win in the la
 
 **Result on the bundled MSFT data, over the walk-forward span (2018-04 → 2025-10):**
 
-- **Walk-forward** (params optimized per period, 6-month OOS windows chained): **~510%** cumulative compound return.
-- **Fixed params** (`0.25Δ`, `21 DTE`, `0.75 close`) over the same span: **~582%** total return.
+- **Walk-forward** (params optimized per period, 6-month OOS windows chained): **~483%** cumulative compound return.
+- **Fixed params** (`0.25Δ`, `21 DTE`, `0.75 close`) over the same span: **~563%** total return.
 
-Walk-forward **underperformed** fixed-params by about 72 percentage points (~12% relative). That sounds bad until you notice what the fixed-params number actually represents: the return *given that you somehow knew, before seeing any of this data, that those exact three parameters would be the winners on this 7.5-year window*.
+Walk-forward **underperformed** fixed-params by about 80 percentage points (~14% relative). That sounds bad until you notice what the fixed-params number actually represents: the return *given that you somehow knew, before seeing any of this data, that those exact three parameters would be the winners on this 7.5-year window*.
 
 The walk-forward number is the return you'd have actually achieved running this strategy in real time, with no peeking. The gap is the cost of not having hindsight — which is to say, the realistic expected return.
 
 **The pedagogical point isn't "walk-forward gets you a better number."** It's the opposite: **fixed-params backtests systematically overestimate the strategy's return; walk-forward gives you the number you'd actually have achieved**. If you see a strategy that "outperforms" in a single full-period backtest, walk-forward will often pull the headline number lower — that's the methodology working, not failing.
 
-This also clarifies the right reading of the headline 945% number reported elsewhere in this tutorial. That number is the fixed-params total return over the *full* 10-year MSFT sample (2016 → 2026), which includes 2 extra years on either side of the walk-forward span. The 510% / 582% comparison above is the apples-to-apples one inside the walk-forward window.
+This also clarifies the right reading of the headline 915% number reported elsewhere in this tutorial. That number is the fixed-params total return over the *full* 10-year MSFT sample (2016 → 2026), which includes 2 extra years on either side of the walk-forward span. The 483% / 563% comparison above is the apples-to-apples one inside the walk-forward window.
 
 ### Common Mistake: Optimizing on Too Many Parameters (Overfitting the Grid)
 
@@ -983,9 +983,9 @@ The reference implementation lives in [`test_cc_backtest.py::TestMsftTenYearRegr
 
 **Our result (`__main__` params on the bundled MSFT data, 500 shuffles, seed=42):**
 
-- Real return: ~945%
-- MC mean: ~654% (average across 500 shuffled paths)
-- MC percentile: 100 (our strategy beat 100% of random shuffles — the real return is higher than every single shuffled path's, with the shuffle max at ~934%)
+- Real return: ~915%
+- MC mean: ~657% (average across 500 shuffled paths)
+- MC percentile: 100 (our strategy beat 100% of random shuffles — the real return is higher than every single shuffled path's, with the shuffle max at ~870%)
 - This means: 0% of random price orderings produced a better return than our strategy did on the real price path.
 
 **Interpretation:** The strategy beats randomized price paths — it exploits real price patterns, not just luck. A percentile above 80 indicates genuine skill.
@@ -1000,33 +1000,33 @@ The reference implementation lives in [`test_cc_backtest.py::TestMsftTenYearRegr
 
 ```text
 call_delta sensitivity:
-  -0.10: 882%   -0.05: 861%   base: 945%   +0.05: 925%   +0.10: 899%
-  Swing: 84 pp (max−min) ≈ 9% of base; worst drop from base is 84 pp.
+  -0.10: 837%   -0.05: 827%   base: 915%   +0.05: 900%   +0.10: 904%
+  Swing: 87 pp (max−min) ≈ 10% of base; worst drop from base is 87 pp.
 
 close_at_pct sensitivity:
-  -0.20: 882%   -0.10: 984%   base: 945%   +0.10: 965%   +0.20: 895%
-  Swing: 102 pp (max−min) ≈ 11% of base; worst drop from base is 63 pp ≈ 7%.
+  -0.20: 946%   -0.10: 956%   base: 915%   +0.10: 857%   +0.20: 902%
+  Swing: 100 pp (max−min) ≈ 11% of base; worst drop from base is 58 pp ≈ 6%.
 
 Strategy is ROBUST: both params produce single-digit-percent drops under
 realistic perturbations. Worth noting: the base config isn't always the
-optimum — close_at_pct=0.65 outperforms the default 0.75 by ~39 pp here,
+optimum — close_at_pct=0.65 outperforms the default 0.75 by ~42 pp here,
 hinting at a small in-sample optimization opportunity (which walk-forward
 in Part 4 lets you exploit honestly without overfitting).
 
 Math behind the call_delta sensitivity:
-  base = 945%, worst variant = 861% (at -0.05 offset, i.e., 0.20Δ)
-  Drop = 945 − 861 = 84 percentage points
-  Relative drop = 84 / 945 = 8.9% of base return
-  → Changing call_delta by 0.05 (from 0.25 to 0.20) costs ~9% of return.
+  base = 915%, worst variant = 827% (at -0.05 offset, i.e., 0.20Δ)
+  Drop = 915 − 827 = 87 percentage points
+  Relative drop = 87 / 915 = 9.6% of base return
+  → Changing call_delta by 0.05 (from 0.25 to 0.20) costs ~10% of return.
 
 Math behind the close_at_pct sensitivity:
-  base = 945%, worst variant = 882% (at -0.20 offset, i.e., 0.55)
-  Drop = 945 − 882 = 63 percentage points
-  Relative drop = 63 / 945 = 6.7% of base return
-  → Changing close_at_pct by 0.20 (from 0.75 to 0.55) costs ~7% of return.
+  base = 915%, worst variant = 857% (at +0.10 offset, i.e., 0.85)
+  Drop = 915 − 857 = 58 percentage points
+  Relative drop = 58 / 915 = 6.3% of base return
+  → Changing close_at_pct by 0.10 (from 0.75 to 0.85) costs ~6% of return.
 ```
 
-**Our result:** ~102-point spread across close_at_pct combos (882–984%). Single-digit-percent relative variation — well inside "robust" territory.
+**Our result:** ~100-point spread across close_at_pct combos (857–956%). Single-digit-percent relative variation — well inside "robust" territory.
 
 - Spread = max − min = 984% − 882% = 102 percentage points
 - Relative spread = 102 / 933 (midpoint) = 10.9% variation
@@ -1042,10 +1042,10 @@ The implementations are [`cc_backtest.py::classify_regime`](https://github.com/l
 
 | Regime | Days | Total P&L | Avg P&L/day |
 | --- | ---: | ---: | ---: |
-| Bull | 1,690 | $57,976 | $34.31 |
-| Bear | 279 | $96,619 | $346.31 |
-| Sideways | 346 | $139,165 | $402.21 |
-| Unknown (first 200 days) | 200 | $5,456 | $27.28 |
+| Bull | 1,690 | $38,917 | $23.03 |
+| Bear | 279 | $84,616 | $303.28 |
+| Sideways | 346 | $139,032 | $401.83 |
+| Unknown (first 200 days) | 200 | $7,916 | $39.58 |
 
 **Interpretation:** Bear and sideways regimes produce **roughly 10× the per-day premium** of bull regimes, even though bull days dominate the day count (1,690 out of 2,515). Two things drive this: (1) volatility is higher in non-bull regimes, so option premium per trade is richer; (2) more positions hit their profit target or assignment threshold when the stock isn't grinding steadily upward. The strategy is structurally defensive — it earns most of its keep when the market is anything other than a one-way bull. That's the point of selling vol.
 
@@ -1063,7 +1063,7 @@ If you only backtest on 2016–2021 (a strong bull run), you'll overestimate buy
 
 You can have a backtest with massive dollar P&L *and* zero statistical edge. These aren't contradictory — they're often the same result viewed two ways.
 
-Run the MSFT backtest with `capital=$100,000`. The "Net Overlay P&L" line shows roughly **+$299,000** of excess profit over buy-and-hold. That looks great. It is also, statistically, indistinguishable from zero.
+Run the MSFT backtest with `capital=$100,000`. The "Net Overlay P&L" line shows roughly **+$268,000** of excess profit over buy-and-hold. That looks great. It is also, statistically, indistinguishable from zero.
 
 The t-statistic is how we settle the question.
 
@@ -1195,20 +1195,20 @@ Internally it reconstructs the buy-and-hold equity curve from `shares × price +
 Running this on the bundled 10-year MSFT data:
 
 ```text
-Annualized Excess Return:          +1.591%
-Annualized Excess Vol:               9.79%
-Sharpe of Excess Return:           +0.163
-t-stat (naive, IID):                +0.51
-t-stat (Newey-West, L=8 ):          +0.58
+Annualized Excess Return:          +1.249%
+Annualized Excess Vol:               9.90%
+Sharpe of Excess Return:           +0.126
+t-stat (naive, IID):                +0.40
+t-stat (Newey-West, L=8 ):          +0.46
 Clears t=2 bar?                     False
 Clears t=3 bar (HLZ 2016)?          False
 ```
 
-The +$299K headline P&L is real money in dollar terms, but **it's not statistically distinguishable from buy-and-hold noise**. With a Sharpe of 0.163 and 10 years of data, we'd need ~150 years of comparable data to clear the t = 2 bar at this effect size.
+The +$268K headline P&L is real money in dollar terms, but **it's not statistically distinguishable from buy-and-hold noise**. With a Sharpe of 0.126 and 10 years of data, we'd need ~250 years of comparable data to clear the t = 2 bar at this effect size.
 
-![Histogram of daily excess returns across 2,514 trading days. The distribution is roughly bell-shaped and centered near zero, with most days falling between minus 200 and plus 200 basis points. A red vertical line marks the sample mean at +0.6 basis points per day, sitting just to the right of zero and well within the bulk of the distribution.](docs/figures/02_excess_histogram.png)
+![Histogram of daily excess returns across 2,514 trading days. The distribution is roughly bell-shaped and centered near zero, with most days falling between minus 200 and plus 200 basis points. A red vertical line marks the sample mean at +0.5 basis points per day, sitting just to the right of zero and well within the bulk of the distribution.](docs/figures/02_excess_histogram.png)
 
-*Daily excess returns from the bundled MSFT backtest. The mean (red line) is +0.6 bps/day, annualizing to +1.59%. The daily standard deviation around that mean is 62 bps — about 100× larger. That noise-to-signal ratio is why the t-statistic is small.*
+*Daily excess returns from the bundled MSFT backtest. The mean (red line) is +0.5 bps/day, annualizing to +1.25%. The daily standard deviation around that mean is 62 bps — well over 100× larger. That noise-to-signal ratio is why the t-statistic is small.*
 
 **Two standard deviations, not one.** The formula `t = mean / (std / √n)` quietly does more work than it looks like. It's the bridge between **two different standard deviations**, and conflating them is how people misread their own backtests.
 
@@ -1233,33 +1233,33 @@ After 2,514 days of averaging, the wobble of our sample-mean *estimate* has shru
 
 **The t-stat is just "how many SEs is the mean away from zero?":**
 
-- Sample mean (the edge): 0.6 bps/day
+- Sample mean (the edge): 0.5 bps/day
 - SE: 1.2 bps
-- Ratio: 0.6 / 1.2 ≈ **0.5**
+- Ratio: 0.5 / 1.2 ≈ **0.4**
 
-That ratio *is* the t-statistic. A mean half an SE from zero is comfortably inside the noise of estimation — exactly what you'd see if the true mean were actually zero and our sample just happened to land slightly above it. To declare the mean "significantly different from zero" we'd need t ≥ 2 (about 2 SEs out).
+That ratio *is* the t-statistic. A mean less than half an SE from zero is comfortably inside the noise of estimation — exactly what you'd see if the true mean were actually zero and our sample just happened to land slightly above it. To declare the mean "significantly different from zero" we'd need t ≥ 2 (about 2 SEs out).
 
-**The dartboard picture.** A dart-thrower aiming at some target throws 2,514 darts. Individual darts land all over the place with spread σ = 62 bps. You take the average position of all the darts; that average wobbles around the true aim with spread SE ≈ 1.2 bps. You compute the average and find it 0.6 bps to the right of zero. Is the thrower aiming right of zero — or aiming at zero and the dart-average just happens to be slightly off? With a 1.2-bps wobble in your estimate and only 0.6 bps off-center, you can't tell. The honest verdict: "could be either."
+**The dartboard picture.** A dart-thrower aiming at some target throws 2,514 darts. Individual darts land all over the place with spread σ = 62 bps. You take the average position of all the darts; that average wobbles around the true aim with spread SE ≈ 1.2 bps. You compute the average and find it 0.5 bps to the right of zero. Is the thrower aiming right of zero — or aiming at zero and the dart-average just happens to be slightly off? With a 1.2-bps wobble in your estimate and only 0.5 bps off-center, you can't tell. The honest verdict: "could be either."
 
-**The misconception this clarifies.** People often see the 62 bps daily noise and conclude "the noise is so large, the t-stat is small." That's only half the story. The 62-bps daily noise got averaged down by √2,514 to a 1.2-bps SE on the *mean* — the √n machinery worked. **The reason the t-stat is small isn't that the daily noise is large in absolute terms; it's that the daily edge (0.6 bps) is even smaller than what 10 years of averaging can resolve.** That's why "just run a longer backtest" doesn't help much. To halve the SE from 1.2 to 0.6 bps (matching the signal exactly, getting t ≈ 1), you'd need 4× the data — 40 years. For t = 2, ~15× the data — ~150 years (the exact figure is `(2/0.163)² × 10 ≈ 151`). The arithmetic is brutal because of the square root.
+**The misconception this clarifies.** People often see the 62 bps daily noise and conclude "the noise is so large, the t-stat is small." That's only half the story. The 62-bps daily noise got averaged down by √2,514 to a 1.2-bps SE on the *mean* — the √n machinery worked. **The reason the t-stat is small isn't that the daily noise is large in absolute terms; it's that the daily edge (0.5 bps) is even smaller than what 10 years of averaging can resolve.** That's why "just run a longer backtest" doesn't help much. To halve the SE from 1.2 to 0.6 bps (matching the signal exactly, getting t ≈ 1), you'd need 4× the data — 40 years. For t = 2, ~25× the data — ~250 years (the exact figure is `(2/0.126)² ≈ 252`). The arithmetic is brutal because of the square root.
 
-**The shortcut.** There's a useful shortcut buried in the math: **t-stat ≈ Sharpe × √(years)**. You can sanity-check the relationship in one line: 0.163 × √10 ≈ 0.52, almost exactly the naive t-stat of 0.51 that `compute_statistics` returns. (The Newey-West-adjusted t-stat of 0.58 includes the autocorrelation correction from earlier in this section, which the shortcut doesn't model.) If your Sharpe and your sample length don't multiply to a healthy t-stat, no amount of fiddling with the strategy will rescue it — you need a bigger effect or more data.
+**The shortcut.** There's a useful shortcut buried in the math: **t-stat ≈ Sharpe × √(years)**. You can sanity-check the relationship in one line: 0.126 × √10 ≈ 0.40, almost exactly the naive t-stat of 0.40 that `compute_statistics` returns. (The Newey-West-adjusted t-stat of 0.46 includes the autocorrelation correction from earlier in this section, which the shortcut doesn't model.) If your Sharpe and your sample length don't multiply to a healthy t-stat, no amount of fiddling with the strategy will rescue it — you need a bigger effect or more data.
 
-![Line chart on a logarithmic x-axis showing the expected t-statistic as a function of years of data, given a Sharpe ratio of 0.163. The curve rises from about 0.16 at one year through 0.52 at ten years, crosses the conventional significance threshold of 2 at roughly 151 years, and crosses the Harvey-Liu-Zhu threshold of 3 at roughly 339 years. A dot at ten years marks the actual MSFT sample.](docs/figures/04_t_stat_vs_years.png)
+![Line chart on a logarithmic x-axis showing the expected t-statistic as a function of years of data, given a Sharpe ratio of 0.126. The curve rises from about 0.13 at one year through 0.40 at ten years, crosses the conventional significance threshold of 2 at roughly 252 years, and crosses the Harvey-Liu-Zhu threshold of 3 at roughly 567 years. A dot at ten years marks the actual MSFT sample.](docs/figures/04_t_stat_vs_years.png)
 
-*The shortcut, visualized. At this strategy's Sharpe, each additional decade of data buys roughly half a t-stat point. Clearing the conventional t=2 bar would take around 150 years; the HLZ bar of 3 would take around 340. The path to a confident conclusion on this setup isn't "run a longer backtest" — it's "find a strategy with a bigger Sharpe" (index VRP, delta-hedged short calls, multi-asset diversification).*
+*The shortcut, visualized. At this strategy's Sharpe, each additional decade of data buys roughly four-tenths of a t-stat point. Clearing the conventional t=2 bar would take around 250 years; the HLZ bar of 3 would take around 570. The path to a confident conclusion on this setup isn't "run a longer backtest" — it's "find a strategy with a bigger Sharpe" (index VRP, delta-hedged short calls, multi-asset diversification).*
 
 #### Why Naive Is *Smaller* Than Newey-West Here
 
-Usually Newey-West shrinks the t-stat — that's the whole point of the correction. In our case, naive (0.51) is slightly *smaller* than NW (0.58). What gives?
+Usually Newey-West shrinks the t-stat — that's the whole point of the correction. In our case, naive (0.40) is slightly *smaller* than NW (0.46). What gives?
 
 Newey-West can move the t-stat in either direction depending on the *sign* of short-lag autocovariances. If consecutive excess returns are positively correlated (a position held across days produces correlated P&L), NW shrinks the t-stat. If they're *negatively* correlated — *mean reversion*, the tendency for returns to bounce back toward their average — NW *inflates* the t-stat because the data has more "effective" sample than a naive count of days suggests.
 
-Our excess returns show mild day-to-day mean reversion — likely from the way profit-target closes and position re-opens introduce alternation between premium-collection days and gap days. Either way the conclusion stands: t = 0.58 is firmly below any meaningful threshold.
+Our excess returns show mild day-to-day mean reversion — likely from the way profit-target closes and position re-opens introduce alternation between premium-collection days and gap days. Either way the conclusion stands: t = 0.46 is firmly below any meaningful threshold.
 
 #### Why Is This Lower Than the Volatility Risk Premium Literature?
 
-The academic VRP literature ([Bakshi-Kapadia 2003](https://academic.oup.com/rfs/article-abstract/16/2/527/1605194), [Coval-Shumway 2001](https://onlinelibrary.wiley.com/doi/10.1111/0022-1082.00352), the [BXM whitepapers](https://www.cboe.com/us/indices/dashboard/BXM/)) reports t-statistics in the range of **5–8**. So why does our well-built MSFT backtest produce 0.58?
+The academic VRP literature ([Bakshi-Kapadia 2003](https://academic.oup.com/rfs/article-abstract/16/2/527/1605194), [Coval-Shumway 2001](https://onlinelibrary.wiley.com/doi/10.1111/0022-1082.00352), the [BXM whitepapers](https://www.cboe.com/us/indices/dashboard/BXM/)) reports t-statistics in the range of **5–8**. So why does our well-built MSFT backtest produce 0.46?
 
 The papers test a different null hypothesis. They compare a short-vol portfolio's return to **cash** (the risk-free rate). We compare the overlay's return to **buy-and-hold of the same stock**. Both questions are valid; they isolate different things.
 
@@ -1275,7 +1275,7 @@ The right way to engage with this gap is to add a parallel test against cash, on
 
 #### Common Mistake: Treating Dollar P&L as Evidence of Edge
 
-A backtest that shows "+$299K excess profit" sounds like a win. It is also perfectly consistent with the strategy adding zero value — just lucky enough to land on the positive side of the noise distribution given a single 10-year sample. Without a t-statistic, you can't distinguish a real $299K edge from a zero-edge strategy that happened to flip 10 lucky coins in a row.
+A backtest that shows "+$268K excess profit" sounds like a win. It is also perfectly consistent with the strategy adding zero value — just lucky enough to land on the positive side of the noise distribution given a single 10-year sample. Without a t-statistic, you can't distinguish a real $268K edge from a zero-edge strategy that happened to flip 10 lucky coins in a row.
 
 Always report the t-stat. Always compute it with Newey-West if you have any time-series data. And always benchmark against the question you actually care about (overlay vs. buy-and-hold *or* strategy vs. cash) — they answer different questions and produce different t-stats.
 
@@ -1292,7 +1292,7 @@ Monte Carlo, sensitivity analysis, and regime testing (above) are the robustness
 | **Newey-West t-stat** (above) | Excess returns indistinguishable from zero | Compute the t-statistic of daily excess returns (overlay minus benchmark) using Newey-West standard errors that correct for the autocorrelation introduced by holding the same option position across multiple days. Conventional bar `\|t\| > 2`; stricter HLZ bar `\|t\| > 3`. Pairs naturally with Deflated Sharpe: t-stat tests whether the strategy's edge survives the *autocorrelation* of its own returns; deflated Sharpe tests whether it survives *multiple-testing bias* across the parameter grid. |
 | **Multi-asset testing** | Stock-specific luck | Run the same strategy on MSFT, AAPL, SPY, QQQ, etc. A strategy that works across many tickers is capturing a real market dynamic, not a quirk of one stock. |
 | **Regime analysis** (above) | Fair-weather strategies | Verify the strategy works in bull, bear, and sideways markets — not just the regime you happened to backtest on. |
-| **Final holdout set** | All-of-the-above leakage | Reserve the last 1–2 years of data and *never touch it* until you're completely done designing and tuning. One shot, no do-overs. **How is this different from walk-forward's test set?** Walk-forward prevents the *code* from peeking at future data, but *you* still see the walk-forward results and make decisions based on them (e.g., "945% looks good, let's keep this approach"). That's information leakage through the human. The holdout prevents that second layer — data you literally never look at during the entire design process. No tuning, no validation, no "let me just check." After you've finalized everything, you run it once on the holdout. That result is your most honest estimate of real-world performance. |
+| **Final holdout set** | All-of-the-above leakage | Reserve the last 1–2 years of data and *never touch it* until you're completely done designing and tuning. One shot, no do-overs. **How is this different from walk-forward's test set?** Walk-forward prevents the *code* from peeking at future data, but *you* still see the walk-forward results and make decisions based on them (e.g., "915% looks good, let's keep this approach"). That's information leakage through the human. The holdout prevents that second layer — data you literally never look at during the entire design process. No tuning, no validation, no "let me just check." After you've finalized everything, you run it once on the holdout. That result is your most honest estimate of real-world performance. |
 | **Paper trading** | Everything historical testing can't | Run the strategy live with fake money for 3–6 months. No amount of historical testing substitutes for this. |
 
 **The key insight:** No single check is enough. The more layers that agree your strategy works, the more confident you can be that you've found something real rather than a pattern in noise. Our backtest uses six of these layers (walk-forward, parameter stability, Monte Carlo, regime analysis, sensitivity, and the Newey-West t-stat on excess returns). Adding multi-asset testing and paper trading is the next step before risking real money.
@@ -1365,16 +1365,16 @@ Here's the complete process:
 
 **Our strategy:**
 
-![Overlay vs. buy-and-hold equity curves on MSFT 2016–2026, showing the overlay ending at approximately $1,045K and buy-and-hold ending at approximately $746K. Both curves grow substantially; the overlay's lead is small early on and widens noticeably from 2019 onward, ending with a $299K gap.](docs/figures/01_equity_curves.png)
+![Overlay vs. buy-and-hold equity curves on MSFT 2016–2026, showing the overlay ending at approximately $1,015K and buy-and-hold ending at approximately $746K. Both curves grow substantially; the overlay's lead is small early on and widens noticeably from 2019 onward, ending with a $268K gap.](docs/figures/01_equity_curves.png)
 
-*Overlay vs. buy-and-hold equity on the bundled MSFT data. The overlay finishes about $299K ahead. The gap is small through 2018, then widens through the 2019–2024 stretch and stays near $200–300K through the recent vol-heavy period — accumulating in the volatile middle years rather than in any single regime.*
+*Overlay vs. buy-and-hold equity on the bundled MSFT data. The overlay finishes about $268K ahead. The gap is small through 2018, then widens through the 2019–2024 stretch and stays near $200–300K through the recent vol-heavy period — accumulating in the volatile middle years rather than in any single regime.*
 
-- ✅ Fixed params: ~945% total return on the bundled `$100K` configuration (final equity ~$1,045K; see Figure 1)
-- ✅ Monte Carlo: percentile 100 (real ordered path beats every one of 500 shuffled paths; max shuffled return ~934%)
+- ✅ Fixed params: ~915% total return on the bundled `$100K` configuration (final equity ~$1,015K; see Figure 1)
+- ✅ Monte Carlo: percentile 100 (real ordered path beats every one of 500 shuffled paths; max shuffled return ~870%)
 - ✅ Sensitivity: single-digit-% drops across both `call_delta` and `close_at_pct` perturbations
 - ✅ All regimes: bull, bear, sideways all profitable
 - ✅ Sharpe ratio vs cash (rf = 4.5%): ~1.12, vs buy-and-hold MSFT's ~0.72 over the same window — risk-adjusted *absolute* returns are strong
-- ⚠️ **Newey-West t-stat on excess returns: 0.58** (overlay's *excess* over buy-and-hold is not statistically distinguishable from zero on this single-stock 10-year sample; see Part 5). The dollar P&L is real, but the evidence for "the overlay specifically is adding value beyond holding MSFT" doesn't clear the statistical bar. This is what the literature on single-stock CC underperformance vs. index CC predicts.
+- ⚠️ **Newey-West t-stat on excess returns: 0.46** (overlay's *excess* over buy-and-hold is not statistically distinguishable from zero on this single-stock 10-year sample; see Part 5). The dollar P&L is real, but the evidence for "the overlay specifically is adding value beyond holding MSFT" doesn't clear the statistical bar. This is what the literature on single-stock CC underperformance vs. index CC predicts.
 
 ### The Limitations We Haven't Solved
 
@@ -1518,7 +1518,7 @@ pytest                           # runs the test suite
 | **Ignoring dividends** | You didn't account for dividend yield | For MSFT, add ~0.7–1% annual yield to returns |
 | **Wrong delta interpretation** | You think 0.50Δ = 50% probability of profit | Delta = probability of being ITM at expiration (mathematically) or equivalent stock hedge (practically) |
 | **Holding too long (close_at_pct too high)** | You set close_at_pct=1.0 (hold to expiry); miss early profit opportunities | Use close_at_pct of 0.50–0.75; capture most of the premium decay without waiting for expiration risk |
-| **Confusing dollar P&L with edge** | Backtest shows "+$299K excess profit"; strategy is actually statistically indistinguishable from buy-and-hold | Compute Newey-West t-stat on daily excess returns (overlay minus benchmark). Aim for `\|t\| > 2` (conventional) or `\|t\| > 3` (Harvey-Liu-Zhu adjusted for multiple testing). Use the `compute_statistics()` helper and read the t-stat alongside the dollar P&L — not in isolation |
+| **Confusing dollar P&L with edge** | Backtest shows "+$268K excess profit"; strategy is actually statistically indistinguishable from buy-and-hold | Compute Newey-West t-stat on daily excess returns (overlay minus benchmark). Aim for `\|t\| > 2` (conventional) or `\|t\| > 3` (Harvey-Liu-Zhu adjusted for multiple testing). Use the `compute_statistics()` helper and read the t-stat alongside the dollar P&L — not in isolation |
 | **Naive t-stat on autocorrelated returns** | You compute t = mean / (std/√n) and get an inflated number that disappears in live trading | Always use Newey-West HAC standard errors when measuring t-stats on overlay or any held-position strategy. Same formula otherwise undersizes the standard error by 30–100% because consecutive-day P&Ls share a common driver (the open option position) |
 
 ---

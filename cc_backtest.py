@@ -262,23 +262,32 @@ def run_cc_overlay(
     wins = 0
     losses = 0
 
+    # Precompute 30-day rolling annualized historical volatility for the entire
+    # series so the daily loop is a constant-time lookup instead of re-running
+    # diff + std on a fresh slice each day. min_periods=3 mirrors the original
+    # warmup threshold (day_idx >= 3 produces a real std, earlier days fall back
+    # to 20% — the long-run equity baseline). rolling_vol_series[i] corresponds
+    # to log_returns[i], i.e. the return realized on day i+1, so on day_idx d we
+    # look up index d-1; day 0 has no return yet and uses the fallback directly.
+    log_returns_series = pd.Series(np.diff(np.log(prices)))
+    rolling_vol_series = (
+        log_returns_series.rolling(30, min_periods=3).std(ddof=1) * math.sqrt(252)
+    ).fillna(0.20)
+
     for day_idx in range(num_days):
         date = dates[day_idx]
         price = float(prices[day_idx])
 
-        # Calculate rolling historical volatility over a 30-day window.
-        if day_idx < 3:
-            # Warmup: too few returns for a meaningful std (NaN or 0).
-            # Fall back to 20% annualized vol (a long-run equity baseline).
-            rolling_vol = 0.20
-        elif day_idx < 30:
-            # Early days: use all available history with Bessel's correction.
-            rolling_vol = float(np.std(np.diff(np.log(prices[:day_idx+1])), ddof=1)) * math.sqrt(252)
-        else:
-            # Steady state: trailing 30-price window ([day_idx-29, day_idx]).
-            rolling_vol = float(np.std(np.diff(np.log(prices[day_idx-29:day_idx+1])), ddof=1)) * math.sqrt(252)
+        # Look up precomputed 30-day rolling annualized vol; fall back to 20%
+        # on day 0 when no return has been realized yet.
+        rolling_vol = (
+            float(rolling_vol_series.iloc[day_idx - 1]) if day_idx > 0 else 0.20
+        )
 
-        if math.isnan(rolling_vol) or rolling_vol <= 0:
+        if rolling_vol <= 0:
+            # Degenerate case (e.g. perfectly constant prices over the window):
+            # can't price an option with non-positive vol. NaN is no longer
+            # possible thanks to fillna(0.20) above.
             continue
 
         # IV estimate: regime-based multiplier (1.1× high, 1.3× normal, 1.5× low).
@@ -453,9 +462,18 @@ def run_cc_overlay(
     # away above strike). The net overlay P&L equals the gap between final
     # equity and the buy-and-hold final value.
     net_overlay_pnl = final_equity - buy_hold_final
-    overlay_costs = total_premium_collected - net_overlay_pnl
     premium_retention = (net_overlay_pnl / total_premium_collected * 100
                         if total_premium_collected > 0 else 0.0)
+
+    # Pre-round the two independent values, then derive `overlay_costs` from the
+    # already-rounded inputs so the accounting identity
+    #   total_premium_collected - overlay_costs == net_overlay_pnl
+    # holds exactly at 2-decimal precision. Rounding each value independently
+    # would let the identity drift by up to ~1.5¢ from accumulated rounding
+    # error (each round can shift its input by up to 0.5¢).
+    total_premium_collected_r = round(total_premium_collected, 2)
+    net_overlay_pnl_r = round(net_overlay_pnl, 2)
+    overlay_costs_r = round(total_premium_collected_r - net_overlay_pnl_r, 2)
 
     # Max drawdown
     peak = capital
@@ -477,9 +495,9 @@ def run_cc_overlay(
         'buy_hold_final': round(buy_hold_final, 2),
         'buy_hold_return_pct': round(buy_hold_return, 2),
         'excess_return_pct': round(excess_return, 2),
-        'net_overlay_pnl': round(net_overlay_pnl, 2),
-        'total_premium_collected': round(total_premium_collected, 2),
-        'overlay_costs': round(overlay_costs, 2),
+        'net_overlay_pnl': net_overlay_pnl_r,
+        'total_premium_collected': total_premium_collected_r,
+        'overlay_costs': overlay_costs_r,
         'premium_retention_pct': round(premium_retention, 1),
         'num_calls_sold': num_calls_sold,
         'wins': wins,

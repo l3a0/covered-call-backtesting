@@ -29,33 +29,33 @@ Contracts (100 shares each):               20    ($95,573.55 stock + $4,426.45 c
 
 Returns
     Buy & Hold Final:            $  746,166.44     +646.17%
-  + Net Overlay P&L:             $  298,947.87     +298.95 pp
-  = CC Overlay Final:            $1,045,114.31     +945.11%
+  + Net Overlay P&L:             $  268,424.87     +268.42 pp
+  = CC Overlay Final:            $1,014,591.31     +914.59%
 
 Overlay P&L Breakdown
-    Gross Premium Collected:     $1,025,092.00    (income from 185 calls sold)
-  - Buybacks + Assignment Costs: $  726,144.12    (paid to close ITM calls + capped upside on assignment)
-  = Net Overlay P&L:             $  298,947.87    (29.2% retained)
+    Gross Premium Collected:     $  998,518.91    (income from 181 calls sold)
+  - Buybacks + Assignment Costs: $  730,094.04    (paid to close ITM calls + capped upside on assignment)
+  = Net Overlay P&L:             $  268,424.87    (26.9% retained)
 
 Activity
-    Calls Sold:                            185
-    Win Rate:                             81.0%
-    Max Drawdown:                        23.02%
+    Calls Sold:                            181
+    Win Rate:                             81.1%
+    Max Drawdown:                        22.86%
 
 Statistical Significance (H0: overlay adds zero value vs. buy-and-hold)
     Days in Sample:                      2514    (9.98 years)
-    Annualized Excess Return:          +1.591%
-    Annualized Excess Vol:               9.79%
-    Sharpe of Excess Return:           +0.163
-    t-stat (naive, IID):                +0.51    (assumes independence — inflated for overlays)
-    t-stat (Newey-West, L=8 ):          +0.58    (correct: accounts for position autocorrelation)
+    Annualized Excess Return:          +1.249%
+    Annualized Excess Vol:               9.90%
+    Sharpe of Excess Return:           +0.126
+    t-stat (naive, IID):                +0.40    (assumes independence — inflated for overlays)
+    t-stat (Newey-West, L=8 ):          +0.46    (correct: accounts for position autocorrelation)
     Clears t=2 bar?                     False    (conventional significance)
     Clears t=3 bar (HLZ 2016)?          False    (multiple-testing adjusted)
 ```
 
 The portfolio is sized into whole 100-share contracts at the initial price; any leftover (here, $4,426 of $100K with MSFT at ~$48) sits as 0%-yield cash. Returns are measured against `capital`, so the cash drag is included. To run a single-contract simulation, omit `capital` from `params`.
 
-The bottom block tests whether the overlay's excess return over buy-and-hold is statistically distinguishable from zero, using Newey-West HAC standard errors that correct for the autocorrelation introduced by holding the same option position across multiple days. On this MSFT sample the t-stat is 0.58 — well below the conventional significance bar of 2 — meaning the $299K of headline overlay P&L isn't reliably distinguishable from noise. See the [tutorial's Part 5](tutorial_covered_call_backtest.md#part-5-robustness-checks--proving-its-not-luck) for the full reasoning.
+The bottom block tests whether the overlay's excess return over buy-and-hold is statistically distinguishable from zero, using Newey-West HAC standard errors that correct for the autocorrelation introduced by holding the same option position across multiple days. On this MSFT sample the t-stat is 0.46 — well below the conventional significance bar of 2 — meaning the $268K of headline overlay P&L isn't reliably distinguishable from noise. See the [tutorial's Part 5](tutorial_covered_call_backtest.md#part-5-robustness-checks--proving-its-not-luck) for the full reasoning.
 
 For an explanation of each output line — including what "assignment loss" means and why buybacks can dominate the overlay's gross premium income — see the [tutorial](tutorial_covered_call_backtest.md) (its Glossary defines the terms; Part 3 walks through the trade-by-trade math).
 
