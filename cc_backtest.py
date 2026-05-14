@@ -126,58 +126,38 @@ def find_strike_for_delta(
 
 def calc_rolling_volatility(prices: NDArray[np.floating[Any]], window: int = 30) -> NDArray[np.floating[Any]]:
     """
-    Calculate rolling historical volatility.
+    Calculate rolling historical volatility (annualized).
 
     Args:
         prices: array of daily closing prices
         window: lookback (default 30 days)
 
     Returns:
-        vols: array of annualized volatilities
+        vols: array of annualized volatilities, NaN until window fills
     """
-    # Log returns: ln(price_t / price_{t-1})
-    # How: np.log(prices) logs every price, then np.diff subtracts
-    # adjacent elements. This works because ln(a) - ln(b) = ln(a/b),
-    # so diff(log(prices)) = ln(price_t / price_{t-1}).
-    # Why log returns: they're additive across days (can sum them for
-    # multi-day returns) and symmetric (+5% then -5% nets to zero).
-    # NOTE: order matters — log(diff(prices)) is NOT the same thing
-    # and will break on negative price changes.
+    # Log returns: ln(price_t / price_{t-1}) = diff(log(prices)). This
+    # works because ln(a) - ln(b) = ln(a/b). Log returns are additive
+    # across days and symmetric (+5% then -5% nets to zero). Order
+    # matters — log(diff(prices)) is NOT the same thing and breaks on
+    # negative price changes.
     log_returns = np.diff(np.log(prices))
 
-    # Standard deviation over rolling window
-    vols: list[float] = []
-    for i in range(len(log_returns)):
-        if i < window - 1:
-            # Not enough prior data points to fill the window yet (e.g., with a
-            # 30-day window, we need at least 30 returns before we can compute
-            # the first volatility). Append NaN to keep vols[] aligned index-
-            # for-index with log_returns[] so downstream lookups stay correct.
-            vols.append(float('nan'))
-        else:
-            # Slice the last `window` returns ending at i. Both +1s compensate
-            # for Python's exclusive right bound: i+1 ensures i is included,
-            # and i-window+1 shifts the start right by 1 so the slice contains
-            # exactly `window` items. E.g., window=30, i=35 →
-            # log_returns[6:36] = indices 6..35 = 30 values.
-            window_returns = log_returns[i-window+1:i+1]
+    # Rolling sample std dev with Bessel's correction (ddof=1) because
+    # these returns are a sample from the stock's theoretical distribution,
+    # not the population — dividing by N-1 avoids underestimating.
+    # rolling(window).std() emits NaN until the window is full, keeping
+    # output index-aligned with log_returns.
+    #
+    # Annualize with √252: variance is additive over independent periods
+    # (σ²_annual = σ²_daily × 252), so std dev scales with √time —
+    # multiply by √252, NOT 252.
+    # pandas-stubs types `Series.rolling()` as `Rolling[Series[Unknown]]` even
+    # when the source Series has a known dtype, which then leaks into
+    # `.to_numpy()`. Silence the two affected sites and `cast` the final
+    # ndarray so downstream typing stays sharp.
+    vol = pd.Series(log_returns).rolling(window).std(ddof=1) * math.sqrt(252)  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]
 
-            # Sample std dev (ddof=1 = Bessel's correction) because these
-            # returns are a sample from the stock's theoretical distribution,
-            # not the entire population. Dividing by N-1 avoids underestimating.
-            std_dev = float(np.std(window_returns, ddof=1))
-
-            # Annualize: variance (σ²) is additive over independent periods,
-            # so annual variance = daily variance × 252:
-            #   σ²_annual = σ²_daily × 252
-            # Taking the square root of both sides to get std dev (volatility):
-            #   σ_annual = √(σ²_daily × 252) = σ_daily × √252
-            # This is why we multiply by √252, NOT 252 — std devs don't add
-            # linearly, they scale with the square root of time.
-            annualized = std_dev * math.sqrt(252)
-            vols.append(annualized)
-
-    return np.array(vols)
+    return cast('NDArray[np.floating[Any]]', vol.to_numpy())  # pyright: ignore[reportUnknownMemberType]
 
 def detect_regime(rolling_vol: float) -> str:
     """Classify volatility regime based on current HV level."""
