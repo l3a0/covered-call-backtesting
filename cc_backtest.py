@@ -3,7 +3,7 @@ from __future__ import annotations
 import csv
 import itertools
 import math
-from typing import Any
+from typing import Any, cast
 
 import numpy as np
 import pandas as pd
@@ -820,17 +820,20 @@ def walk_forward_optimization(
     if fixed_params is None:
         fixed_params = {'risk_free_rate': 0.045, 'capital': 100_000}
 
-    # Convert to pandas for easier date slicing.
+    # Convert to pandas for easier date slicing. (pandas-stubs types a couple
+    # of these signatures loosely — `pd.to_datetime` and `Series.min/max` — so
+    # we `cast`/`pyright: ignore` just those two spots; everything downstream
+    # is plain `pd.Timestamp` arithmetic and slicing.)
     df = pd.DataFrame({'date': dates, 'price': np.asarray(prices, dtype=float)})
-    df['date'] = pd.to_datetime(df['date'])
+    df['date'] = pd.to_datetime(df['date'])  # pyright: ignore[reportUnknownMemberType]
 
     all_results: list[dict[str, Any]] = []
     best_params_per_period: list[dict[str, Any]] = []
 
     # First date in dataset (e.g., Apr 2014)
-    start_date = df['date'].min()
+    start_date = cast('pd.Timestamp', df['date'].min())  # pyright: ignore[reportUnknownMemberType]
     # Last date in dataset (e.g., Apr 2026)
-    end_date = df['date'].max()
+    end_date = cast('pd.Timestamp', df['date'].max())  # pyright: ignore[reportUnknownMemberType]
     # The "knife" between train and test.
     # We start train_years in so there's enough history for the first training window.
     # Example: start_date = Apr 2014, train_years = 2 → current_date = Apr 2016
@@ -887,7 +890,7 @@ def walk_forward_optimization(
             params = {**fixed_params, **combo}
 
             try:
-                summary, trades, daily_eq = run_cc_overlay(  # Run backtest with these params
+                _summary, _trades, daily_eq = run_cc_overlay(  # Run backtest with these params
                     list(train_df['date'].dt.strftime('%Y-%m-%d')),
                     np.asarray(train_df['price'].values, dtype=float),
                     params,
@@ -945,7 +948,7 @@ def walk_forward_optimization(
 
         # === Step 2: TEST on out-of-sample data (rules are LOCKED — no re-tuning) ===
         test_params = {**fixed_params, **best_params}  # Same params from training — this is the honest score
-        summary, trades, daily_eq = run_cc_overlay(
+        _summary, _trades, daily_eq = run_cc_overlay(
             list(test_df['date'].dt.strftime('%Y-%m-%d')),
             np.asarray(test_df['price'].values, dtype=float),
             test_params,

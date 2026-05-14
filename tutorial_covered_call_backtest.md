@@ -1485,9 +1485,9 @@ The full implementation lives in this repository. Each file is the source of tru
 
 | File | What it contains |
 | --- | --- |
-| [`cc_backtest.py`](https://github.com/l3a0/covered-call-backtesting/blob/main/cc_backtest.py) | Black-Scholes pricing, rolling-volatility helpers, the `run_cc_overlay` engine, and `compute_statistics` for Newey-West t-stats |
-| [`test_cc_backtest.py`](https://github.com/l3a0/covered-call-backtesting/blob/main/test_cc_backtest.py) | Pytest suite covering pricing primitives, the overlay state machine, scenario tests, and the statistics helper |
-| [`download_prices.py`](https://github.com/l3a0/covered-call-backtesting/blob/main/download_prices.py) | Fetches historical daily closes via yfinance |
+| [`cc_backtest.py`](https://github.com/l3a0/covered-call-backtesting/blob/main/cc_backtest.py#L222) | Black-Scholes pricing, rolling-volatility helpers, the [`run_cc_overlay`](https://github.com/l3a0/covered-call-backtesting/blob/main/cc_backtest.py#L222) engine, and [`compute_statistics`](https://github.com/l3a0/covered-call-backtesting/blob/main/cc_backtest.py#L517) for Newey-West t-stats |
+| [`test_cc_backtest.py`](https://github.com/l3a0/covered-call-backtesting/blob/main/test_cc_backtest.py#L473) | Pytest suite covering pricing primitives, the overlay state machine, scenario tests, and the statistics helper |
+| [`download_prices.py`](https://github.com/l3a0/covered-call-backtesting/blob/main/download_prices.py#L11) | Fetches historical daily closes via yfinance |
 | [`msft_10yr_prices.csv`](https://github.com/l3a0/covered-call-backtesting/blob/main/msft_10yr_prices.csv) | Bundled 10-year MSFT daily-close dataset used in the worked examples |
 | [`requirements.txt`](https://github.com/l3a0/covered-call-backtesting/blob/main/requirements.txt) | Pinned dependencies |
 | [`README.md`](https://github.com/l3a0/covered-call-backtesting/blob/main/README.md) | Quick-start instructions and project summary |
