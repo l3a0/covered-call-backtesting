@@ -185,3 +185,43 @@ When asked to edit or improve an existing draft:
 - [ ] Do more than two consecutive paragraphs start with "I"?
 - [ ] Does the subtitle share keywords with the title?
 - [ ] For each "X is not Y — it's Z" construction, does Y name a misconception the reader actually holds? If not, drop the negation and just state Z.
+
+---
+
+## Cross-Surface Consistency
+
+This repo has three surfaces that can drift apart: **code** (`cc_backtest.py`, `test_cc_backtest.py`, `make_figures.py`, `download_prices.py`), the **README** (`README.md`), and the **tutorial** (`tutorial_covered_call_backtest.md`). On every code change, sweep both prose surfaces before reporting done. Don't ask permission to verify — verify, then include findings in the response.
+
+### What can drift
+
+- **Line anchors** in Markdown links of the form `file.py#L<N>`. Adding, removing, or moving lines in a referenced file can break these silently.
+- **Symbol names** cited in prose (function, class, and test names like `run_cc_overlay`, `TestScenarioFlatMarket`, `compute_statistics`).
+- **Pinned numbers** in the README "Sample output" block and the tutorial's quoted results (returns, win rates, t-stats, regime P&L tables, walk-forward period counts). When a regression test gets re-pinned, prose almost always needs the matching update.
+- **Strategy parameters table** in the README, which mirrors the `params` dict in `cc_backtest.py`'s `__main__`.
+- **Test-scenario names** in the README's "What the engine guarantees" line.
+- **CI claim** in the README, which describes `.github/workflows/ci.yml`.
+- **"Last updated" date** at the bottom of the tutorial.
+
+### Sweep commands
+
+Before reporting a code change done, run:
+
+```bash
+# Every line anchor — confirm each still points at the right symbol
+rg '\.py#L\d+' README.md tutorial_covered_call_backtest.md
+
+# Every symbol name cited in prose — confirm names still exist in code
+rg -n '(run_cc_overlay|compute_statistics|calc_rolling_volatility|estimate_iv|detect_regime|find_strike_for_delta|classify_regime|regime_analysis|walk_forward_optimization|TestScenario\w*|TestMsftTenYearRegression)' README.md tutorial_covered_call_backtest.md
+```
+
+For pinned numbers, re-run the backtest and any updated tests; diff the output against the README sample block and quoted figures in the tutorial.
+
+**Keep the symbol-list regex above in sync with the code's public surface.** When renaming, adding, or removing a top-level symbol in `cc_backtest.py` or a top-level test class in `test_cc_backtest.py` (anything plausibly cited in prose), update the regex in the same change so future sweeps stay accurate. Don't ask — just do it and note it in the consistency-sweep report.
+
+### How to report
+
+End any code-change response with a short **Consistency sweep** note listing what you checked, what you updated, and what's still stale (if anything). If a regression test was re-pinned and matching prose was updated, say so explicitly so the reviewer doesn't have to hunt for it.
+
+### When to skip
+
+Pure-internal refactors that don't move line numbers and don't change observable behavior (renaming a local variable inside a function body, reordering imports). Say "no prose-facing surfaces affected" so it's clear the check was considered, not forgotten.

@@ -703,7 +703,7 @@ def run_cc_overlay(
     dates: list[str] | NDArray[Any],
     prices: NDArray[np.floating[Any]],
     params: dict[str, float],
-) -> tuple[dict[str, Any], list[dict[str, Any]], list[dict[str, Any]]]:
+) -> tuple[dict[str, Any], list[dict[str, Any]], pd.DataFrame]:
 ```
 
 The function takes the price series and the strategy parameters and returns `(summary, trades, daily_equity)` — a summary dict with the headline metrics, a list of every trade with its action/price/P&L, and the day-by-day equity curve.
@@ -873,7 +873,7 @@ def walk_forward_optimization(
     train_years: int = 2,
     test_months: int = 6,
     roll_months: int = 6,
-) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+) -> tuple[pd.DataFrame, list[dict[str, Any]]]:
 ```
 
 The function takes the price series, a parameter grid (dict mapping parameter name to candidate values), and the window-sizing knobs. It returns `(oos_equity, period_records)` — the stitched out-of-sample daily equity curve, and a list of dicts describing each iteration's train/test bounds (ISO date strings), the chosen `best_params`, and the in-sample training Sharpe that won.
@@ -893,11 +893,11 @@ Running walk-forward on the bundled MSFT data with the 3×3×3 grid produces 15 
 
 | Parameter | Most-chosen value | Counts across 15 periods |
 | --- | --- | --- |
-| **call_delta** | **0.25** | 0.25 × 13, 0.20 × 2, 0.15 × 0 |
-| **dte** | **21** | 21 × 10, 30 × 4, 45 × 1 |
-| **close_at_pct** | **0.50** | 0.50 × 8, 0.75 × 6, 1.00 × 1 |
+| **call_delta** | **0.25** | 0.25 × 14, 0.20 × 1, 0.15 × 0 |
+| **dte** | **21** | 21 × 9, 30 × 4, 45 × 2 |
+| **close_at_pct** | **0.75** | 0.75 × 11, 0.50 × 2, 1.00 × 2 |
 
-The first two match the `__main__` defaults: `0.25Δ` and `21 DTE` win in the large majority of periods. The third is a surprise — **`close_at_pct=0.50` wins more periods than the `0.75` default**. Closing at 50% of premium captured (rather than 75%) frees capital faster and skips the last sliver of theta that often gets eaten by gamma anyway.
+All three winners match the `__main__` defaults: `0.25Δ`, `21 DTE`, and `0.75 close_at_pct`. The walk-forward optimizer searches 27 combinations across 15 disjoint out-of-sample periods and keeps landing on the same configuration the rest of the tutorial uses. That convergence is a small piece of evidence that these defaults are what an honest, no-peeking search settles on across very different market windows.
 
 **Why these defaults make sense:**
 
@@ -911,9 +911,10 @@ The first two match the `__main__` defaults: `0.25Δ` and `21 DTE` win in the la
    - Gives enough time for the trade to work out
    - Allows 4–5 cycles per year for reinvesting premiums
 
-3. **50% profit target** beats holding longer:
-   - On this data, the optimizer prefers closing earlier — the last 25% of theta tends to come with high gamma risk, and freeing capital sooner lets you start the next cycle
-   - The `__main__` default is 0.75 (more conservative); walk-forward suggests 0.50 may leave less on the table per cycle while keeping capital busier
+3. **75% profit target** is the sweet spot for closing:
+   - Captures most of the premium decay without holding through the gamma-heavy final stretch
+   - Closing earlier (50%) leaves real income on the table; holding to expiry (100%) means riding through the period where assignment risk is highest and time decay slows
+   - Walk-forward picks 0.75 in 11 of 15 periods — the optimizer keeps choosing it across very different market windows
 
 4. **Deep-ITM close at delta > 0.70** caps assignment damage:
    - When the call goes deep ITM, gamma is steep and a small adverse move can wipe out months of premium income
@@ -1028,8 +1029,8 @@ Math behind the close_at_pct sensitivity:
 
 **Our result:** ~100-point spread across close_at_pct combos (857–956%). Single-digit-percent relative variation — well inside "robust" territory.
 
-- Spread = max − min = 984% − 882% = 102 percentage points
-- Relative spread = 102 / 933 (midpoint) = 10.9% variation
+- Spread = max − min = 956% − 857% = 99 percentage points
+- Relative spread = 99 / 906 (midpoint) = 10.9% variation
 - Compare: if the spread were 400+ pp / 40%+ variation, that'd be a sign of overfitting; we're well below.
 
 ### Regime Analysis: Does It Work in Bulls, Bears, and Sideways?
@@ -1181,7 +1182,7 @@ The full implementation is [`cc_backtest.py::compute_statistics`](https://github
 
 ```python
 def compute_statistics(
-    daily_equity: list[dict[str, Any]],
+    daily_equity: pd.DataFrame,
     num_contracts: int,
     cash: float,
     periods_per_year: int = 252,
