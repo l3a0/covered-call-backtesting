@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import csv
 import itertools
 import math
 from typing import Any, cast
@@ -203,7 +202,7 @@ def run_cc_overlay(
     dates: list[str] | NDArray[Any],
     prices: NDArray[np.floating[Any]],
     params: dict[str, float],
-) -> tuple[dict[str, Any], list[dict[str, Any]], list[dict[str, Any]]]:
+) -> tuple[dict[str, Any], list[dict[str, Any]], pd.DataFrame]:
     """
     Simulate a covered call overlay strategy from start to finish.
 
@@ -227,6 +226,10 @@ def run_cc_overlay(
 
     Returns:
         (summary, trades, daily_equity)
+
+        daily_equity is a DataFrame with columns ['date', 'equity', 'price'],
+        one row per simulated day. Downstream consumers
+        (compute_statistics, make_figures, walk-forward) index by column.
     """
 
     # Extract parameters from dict
@@ -252,7 +255,10 @@ def run_cc_overlay(
 
     num_days = len(dates)
     trades: list[dict[str, Any]] = []
-    daily_equity: list[dict[str, Any]] = []
+    # Accumulate daily snapshots as a list-of-dicts in the hot loop (the
+    # natural append shape), then materialize a DataFrame once at the
+    # return boundary so downstream consumers can index by column.
+    daily_rows: list[dict[str, Any]] = []
 
     # State tracking
     position: dict[str, Any] | None = None
@@ -445,10 +451,23 @@ def run_cc_overlay(
             T_remaining = max(days_left / 252, 0)
             call_value = bs_price(price, position['strike'], T_remaining, r, iv_estimate, option_type='call')
             equity += (position['premium_collected'] - call_value) * shares
-        daily_equity.append({'date': date, 'equity': round(equity, 2), 'price': price})
+        daily_rows.append({'date': date, 'equity': round(equity, 2), 'price': price})
+
+    # Materialize the per-day snapshots as a DataFrame once at the return
+    # boundary. Schema: ['date', 'equity', 'price'], one row per simulated
+    # day. Empty input (no days produced any row) becomes an empty DF with
+    # the same columns so column access downstream still works.
+    daily_equity: pd.DataFrame = (
+        pd.DataFrame(daily_rows, columns=['date', 'equity', 'price'])
+        if daily_rows
+        else pd.DataFrame({'date': [], 'equity': pd.Series([], dtype=float), 'price': pd.Series([], dtype=float)})
+    )
 
     # Compute summary stats
-    final_equity = daily_equity[-1]['equity'] if daily_equity else capital
+    final_equity: float = (
+        float(daily_equity['equity'].iloc[-1])  # pyright: ignore[reportUnknownMemberType, reportUnknownArgumentType]
+        if not daily_equity.empty else capital
+    )
     total_return = (final_equity - capital) / capital * 100
 
     # Buy-and-hold benchmark: hold the same `shares` for the whole period
@@ -485,12 +504,10 @@ def run_cc_overlay(
     # ensures the peak never drops below the starting baseline. (Same
     # pandas-stubs Series[Unknown] noise pattern as the rolling-vol path
     # — we annotate explicitly to keep the silencing scoped.)
-    equity_series: pd.Series[float] = pd.Series(
-        [d['equity'] for d in daily_equity], dtype=float
-    )
-    if equity_series.empty:
+    if daily_equity.empty:
         max_dd = 0.0
     else:
+        equity_series: pd.Series[float] = daily_equity['equity'].astype(float)  # pyright: ignore[reportUnknownMemberType, reportAssignmentType]
         peak_series = equity_series.cummax().clip(lower=capital)  # pyright: ignore[reportUnknownMemberType]
         max_dd = float(((peak_series - equity_series) / peak_series * 100).max())  # pyright: ignore[reportUnknownMemberType, reportUnknownArgumentType]
 
@@ -522,7 +539,7 @@ def run_cc_overlay(
 # ====================
 
 def compute_statistics(
-    daily_equity: list[dict[str, Any]],
+    daily_equity: pd.DataFrame,
     num_contracts: int,
     cash: float,
     periods_per_year: int = 252,
@@ -558,8 +575,8 @@ def compute_statistics(
         |t_NW| < 2.0  → not reliably different from noise
 
     Args:
-        daily_equity: output of run_cc_overlay (list of dicts with
-            keys 'date', 'equity', 'price').
+        daily_equity: output of run_cc_overlay (DataFrame with columns
+            'date', 'equity', 'price').
         num_contracts: number of option contracts in the portfolio
             (each represents 100 shares). From summary['num_contracts'].
         cash: leftover uninvested cash from initial sizing. From
@@ -575,8 +592,16 @@ def compute_statistics(
     # Reconstruct two equity curves from the same daily series.
     # The overlay curve includes mark-to-market on the short call;
     # the buy-and-hold curve is just stock value plus idle cash.
-    equity = np.array([d['equity'] for d in daily_equity], dtype=float)
-    prices = np.array([d['price'] for d in daily_equity], dtype=float)
+    # (pandas-stubs degrades Series.to_numpy() to ndarray[Unknown, Unknown];
+    # cast back to the float ndarray we actually have.)
+    equity = cast(
+        'NDArray[np.float64]',
+        daily_equity['equity'].to_numpy(dtype=float),  # pyright: ignore[reportUnknownMemberType]
+    )
+    prices = cast(
+        'NDArray[np.float64]',
+        daily_equity['price'].to_numpy(dtype=float),  # pyright: ignore[reportUnknownMemberType]
+    )
     bh_equity = shares * prices + cash
 
     # Daily simple returns on each equity curve
@@ -754,7 +779,7 @@ def regime_analysis(
     trades_df = pd.DataFrame(trades, columns=['date', 'pnl'])
     nonzero = trades_df[trades_df['pnl'] != 0]
     date_to_regime: dict[str, str] = dict(zip(dates, regimes.tolist()))  # pyright: ignore[reportUnknownArgumentType]
-    regime_pnl: dict[str, float] = (
+    regime_pnl: dict[str, float] = (  # pyright: ignore[reportUnknownVariableType]
         nonzero['pnl']
         .groupby(nonzero['date'].map(date_to_regime))  # pyright: ignore[reportUnknownMemberType, reportUnknownArgumentType]
         .sum()
@@ -807,7 +832,7 @@ def walk_forward_optimization(
     train_years: int = 2,
     test_months: int = 6,
     roll_months: int = 6,
-) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+) -> tuple[pd.DataFrame, list[dict[str, Any]]]:
     """
     Walk-forward optimization for the covered-call overlay strategy.
 
@@ -827,9 +852,11 @@ def walk_forward_optimization(
             (default 6, i.e. non-overlapping test windows).
 
     Returns:
-        oos_equity: stitched out-of-sample equity curve as a list of
-            `{'date', 'equity', 'price'}` dicts, one per test-window
-            day across all iterations.
+        oos_equity: stitched out-of-sample equity curve as a DataFrame
+            with columns ['date', 'equity', 'price'], one row per
+            test-window day across all iterations (concatenated in time
+            order). Empty DataFrame with those columns if no test
+            window produced a result.
         period_records: list of dicts describing each iteration —
             train/test bounds (ISO date strings), the chosen
             `best_params`, and the in-sample `train_sharpe` that won.
@@ -844,7 +871,9 @@ def walk_forward_optimization(
     df = pd.DataFrame({'date': dates, 'price': np.asarray(prices, dtype=float)})
     df['date'] = pd.to_datetime(df['date'])  # pyright: ignore[reportUnknownMemberType]
 
-    all_results: list[dict[str, Any]] = []
+    # Collect each OOS window's daily_equity DataFrame; concatenate at the
+    # end so callers receive a single stitched curve.
+    oos_frames: list[pd.DataFrame] = []
     best_params_per_period: list[dict[str, Any]] = []
 
     # First date in dataset (e.g., Apr 2014)
@@ -915,10 +944,17 @@ def walk_forward_optimization(
             except Exception:
                 continue
 
-            returns: list[float] = []
-            for i in range(1, len(daily_eq)):
-                daily_return = (daily_eq[i]['equity'] - daily_eq[i - 1]['equity']) / daily_eq[i - 1]['equity']
-                returns.append(daily_return)
+            # Daily simple returns on the in-sample equity curve. pct_change
+            # drops one row at the head (no prior equity), matching the
+            # original (i, i-1) loop. dropna handles the leading NaN; an
+            # empty result (1-day window or all-NaN) trips the else branch.
+            returns = cast(
+                'list[float]',
+                daily_eq['equity']
+                .pct_change()  # pyright: ignore[reportUnknownMemberType]
+                .dropna()  # pyright: ignore[reportUnknownMemberType]
+                .tolist(),  # pyright: ignore[reportUnknownMemberType]
+            )
 
             if returns:
                 # 1. Average daily return: sum all daily returns, divide by count
@@ -964,20 +1000,32 @@ def walk_forward_optimization(
         })
 
         # === Step 2: TEST on out-of-sample data (rules are LOCKED — no re-tuning) ===
-        test_params = {**fixed_params, **best_params}  # Same params from training — this is the honest score
+        # pyright drops the `dict[str, float]` narrow on `fixed_params` by
+        # this point in the function (the in-loop `**fixed_params` at the
+        # combo-search site is fine), so suppress the false unpack error
+        # locally rather than rebinding to a fresh local.
+        test_params = {**fixed_params, **best_params}  # pyright: ignore[reportGeneralTypeIssues]  # Same params from training — this is the honest score
         _summary, _trades, daily_eq = run_cc_overlay(
             list(test_df['date'].dt.strftime('%Y-%m-%d')),
             np.asarray(test_df['price'].values, dtype=float),
             test_params,
         )
 
-        all_results.extend(daily_eq)  # Collect OOS equity curves to stitch together later
+        oos_frames.append(daily_eq)  # Collect OOS equity curves to stitch together later
 
         # === Step 3: ROLL FORWARD ===
         current_date += pd.DateOffset(months=roll_months)  # Slide both windows forward
         # Next iteration trains on newer data and tests on the next unseen chunk
 
-    return all_results, best_params_per_period
+    # Concat per-window frames into one continuous OOS curve. If no
+    # window produced output, return an empty frame with the same schema
+    # so callers can index columns without a None-check.
+    oos_equity: pd.DataFrame = (
+        pd.concat(oos_frames, ignore_index=True)  # pyright: ignore[reportUnknownMemberType]
+        if oos_frames
+        else pd.DataFrame({'date': [], 'equity': pd.Series([], dtype=float), 'price': pd.Series([], dtype=float)})
+    )
+    return oos_equity, best_params_per_period
 
 
 # ====================
@@ -985,19 +1033,27 @@ def walk_forward_optimization(
 # ====================
 
 if __name__ == '__main__':
-    # Load price data from CSV (date,close format)
-    # Skips header rows that don't start with a date (e.g. yfinance multi-index headers)
-    date_list: list[str] = []
-    price_list: list[float] = []
-    with open('msft_10yr_prices.csv') as f:
-        reader = csv.reader(f)
-        for row in reader:
-            if not row or not row[0][:4].isdigit():
-                continue  # skip header/metadata lines
-            date_list.append(row[0])
-            price_list.append(float(row[1]))
-
-    prices_arr = np.array(price_list)
+    # Load price data from CSV. yfinance writes a 3-row multi-index
+    # header (Price/Close, Ticker/MSFT, Date/(empty)) before the
+    # actual rows, so we skip those and name the two columns
+    # explicitly. If yfinance ever changes that prefix, the pinned
+    # MSFT regression tests will fail loudly.
+    # pandas-stubs types `read_csv` as a complex overload set whose return
+    # falls back to Unknown for `Series.tolist()` and `Series.to_numpy()`.
+    # `cast` the two consumed columns back to their actual runtime types so
+    # downstream typing stays sharp; the suppressions are scoped to just
+    # those two calls.
+    prices_df = pd.read_csv(  # pyright: ignore[reportUnknownMemberType]
+        'msft_10yr_prices.csv',
+        skiprows=3,
+        header=None,
+        names=['date', 'close'],
+    )
+    date_list = cast('list[str]', prices_df['date'].tolist())  # pyright: ignore[reportUnknownMemberType]
+    prices_arr = cast(
+        'NDArray[np.float64]',
+        prices_df['close'].to_numpy(dtype=float),  # pyright: ignore[reportUnknownMemberType]
+    )
 
     params: dict[str, float] = {
         'call_delta': 0.25,

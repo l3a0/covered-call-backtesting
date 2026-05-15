@@ -10,6 +10,7 @@ import random
 from typing import Any
 
 import numpy as np
+import pandas as pd
 import pytest
 
 from cc_backtest import (
@@ -657,8 +658,8 @@ class TestScenarioEquityFinalState:
             expected_equity = final_stock_value + realized
             assert summary['final_equity'] == pytest.approx(expected_equity, abs=0.01)
 
-        # daily_equity[-1] equity should match summary
-        assert daily_equity[-1]['equity'] == summary['final_equity']
+        # daily_equity's final row equity should match summary
+        assert daily_equity['equity'].iloc[-1] == summary['final_equity']
 
 
 # ====================
@@ -668,13 +669,12 @@ class TestScenarioEquityFinalState:
 def _build_daily_equity(
     equity_series: list[float],
     price_series: list[float],
-) -> list[dict[str, Any]]:
+) -> pd.DataFrame:
     """Build a daily_equity payload in the shape compute_statistics expects."""
     dates = _fake_dates(len(equity_series))
-    return [
-        {'date': d, 'equity': e, 'price': p}
-        for d, e, p in zip(dates, equity_series, price_series)
-    ]
+    return pd.DataFrame(
+        {'date': dates, 'equity': equity_series, 'price': price_series}
+    )
 
 
 class TestComputeStatistics:
@@ -1280,12 +1280,10 @@ class TestMsftTenYearRegression:
         # Cumulative OOS compound return: chain per-period 6mo returns.
         cumulative = 1.0
         for r in records:
-            period_eq = [
-                d for d in oos_equity
-                if r['test_start'] <= d['date'] < r['test_end']
-            ]
-            assert period_eq, f"no OOS equity for period {r['test_start']}"
-            period_ret = (period_eq[-1]['equity'] - period_eq[0]['equity']) / period_eq[0]['equity']
+            in_period = (oos_equity['date'] >= r['test_start']) & (oos_equity['date'] < r['test_end'])
+            period_eq: pd.Series[float] = oos_equity.loc[in_period, 'equity']  # type: ignore[assignment]
+            assert not period_eq.empty, f"no OOS equity for period {r['test_start']}"
+            period_ret = (period_eq.iloc[-1] - period_eq.iloc[0]) / period_eq.iloc[0]
             cumulative *= (1.0 + period_ret)
         cumulative_pct = (cumulative - 1.0) * 100
         # Pinned around ~483%, allow a few pp of slack for floating-point

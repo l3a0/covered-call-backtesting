@@ -28,6 +28,7 @@ from typing import Any, cast
 
 import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
 from matplotlib.figure import Figure
 from matplotlib.ticker import FuncFormatter
 from numpy.typing import NDArray
@@ -63,15 +64,21 @@ def load_msft_csv(path: str) -> tuple[list[str], NDArray[np.float64]]:
 
 
 def fig1_equity_curves(
-    daily_equity: list[dict[str, Any]], summary: dict[str, Any]
+    daily_equity: pd.DataFrame, summary: dict[str, Any]
 ) -> Figure:
     """Overlay vs. buy-and-hold equity curves over the 10-year window."""
     shares = summary["num_contracts"] * 100
     cash = summary["cash"]
 
-    date_strs = [d["date"] for d in daily_equity]
-    overlay = np.array([d["equity"] for d in daily_equity], dtype=float)
-    prices = np.array([d["price"] for d in daily_equity], dtype=float)
+    date_strs = cast("list[str]", daily_equity["date"].tolist())
+    overlay = cast(
+        "NDArray[np.float64]",
+        daily_equity["equity"].to_numpy(dtype=float),
+    )
+    prices = cast(
+        "NDArray[np.float64]",
+        daily_equity["price"].to_numpy(dtype=float),
+    )
     bh = shares * prices + cash
 
     dates = np.array(date_strs, dtype="datetime64[D]")
@@ -117,7 +124,7 @@ def fig1_equity_curves(
 
 
 def fig2_excess_histogram(
-    daily_equity: list[dict[str, Any]],
+    daily_equity: pd.DataFrame,
     summary: dict[str, Any],
     stats: dict[str, Any],
 ) -> Figure:
@@ -125,8 +132,14 @@ def fig2_excess_histogram(
     shares = summary["num_contracts"] * 100
     cash = summary["cash"]
 
-    equity = np.array([d["equity"] for d in daily_equity], dtype=float)
-    prices = np.array([d["price"] for d in daily_equity], dtype=float)
+    equity = cast(
+        "NDArray[np.float64]",
+        daily_equity["equity"].to_numpy(dtype=float),
+    )
+    prices = cast(
+        "NDArray[np.float64]",
+        daily_equity["price"].to_numpy(dtype=float),
+    )
     bh = shares * prices + cash
 
     overlay_ret = np.diff(equity) / equity[:-1]
