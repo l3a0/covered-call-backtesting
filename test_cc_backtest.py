@@ -1148,18 +1148,22 @@ class TestMsftTenYearRegression:
 
         The edge case 'price exactly equal to threshold' stays
         sideways (strict inequalities for bull/bear).
+
+        classify_regime returns a Series of per-index labels; the
+        scalar "regime at the end" is `.iloc[-1]`.
         """
         base = [100.0] * 200
 
-        assert classify_regime(base + [106.0]) == 'bull'
-        assert classify_regime(base + [94.0]) == 'bear'
-        assert classify_regime(base + [100.0]) == 'sideways'
+        assert classify_regime(base + [106.0]).iloc[-1] == 'bull'
+        assert classify_regime(base + [94.0]).iloc[-1] == 'bear'
+        assert classify_regime(base + [100.0]).iloc[-1] == 'sideways'
         # Boundary: strict inequalities, so equal-to-threshold stays sideways
-        assert classify_regime(base + [105.0]) == 'sideways'
-        assert classify_regime(base + [95.0]) == 'sideways'
-        # Insufficient history
-        assert classify_regime([100.0] * 50) == 'unknown'
-        assert classify_regime([]) == 'unknown'
+        assert classify_regime(base + [105.0]).iloc[-1] == 'sideways'
+        assert classify_regime(base + [95.0]).iloc[-1] == 'sideways'
+        # Insufficient history: SMA undefined, label stays 'unknown'
+        assert classify_regime([100.0] * 50).iloc[-1] == 'unknown'
+        # Empty input: empty Series, no label to take
+        assert classify_regime([]).empty
 
     def test_regime_analysis(
         self, data: tuple[list[str], np.ndarray[Any, np.dtype[np.float64]]]

@@ -639,40 +639,50 @@ def compute_statistics(
 # ====================
 
 def classify_regime(
-    prices: NDArray[np.floating[Any]] | list[float],
+    prices: pd.Series[float] | NDArray[np.floating[Any]] | list[float],
     window: int = 200,
     threshold: float = 0.05,
-) -> str:
+) -> pd.Series[str]:
     """
-    Classify the market regime at the *end* of `prices` based on where
-    the last price sits relative to its trailing-`window` simple moving
-    average:
+    Classify the market regime at each index of a price series using a
+    trailing-`window`-day simple moving average with ±`threshold` bands:
 
-      - "bull"     if last price > SMA × (1 + threshold)
-      - "bear"     if last price < SMA × (1 − threshold)
-      - "sideways" if last price is within ±threshold of the SMA
-      - "unknown"  if there are fewer than `window` observations
+      - 'bull'     if the close is > SMA × (1 + threshold)
+      - 'bear'     if the close is < SMA × (1 − threshold)
+      - 'sideways' if the close is within ±threshold of the SMA
+      - 'unknown'  for the first `window` − 1 indices, where the SMA is
+                   undefined (rolling-window warmup)
+
+    Each index i is classified using prices through index i, inclusive
+    (today's close vs the SMA of today and the prior `window` − 1 days).
+    For "no future peeking" semantics — the regime as known at the
+    *start* of day i, using only prices through day i − 1 — apply
+    `.shift(1)` to the result. See `regime_analysis` for that pattern.
 
     Args:
-        prices: array of closing prices (chronological).
-        window: SMA lookback in trading days (default 200, roughly one
-            calendar year).
+        prices: chronological price series (pd.Series, ndarray, or list).
+        window: SMA lookback in trading days (default 200, ~1 year).
         threshold: fractional band around the SMA that counts as
-            "sideways" (default 0.05 = ±5%).
+            'sideways' (default 0.05 = ±5%).
 
     Returns:
-        One of 'bull', 'bear', 'sideways', 'unknown'.
+        pd.Series of regime labels (dtype object), one per input price.
+        To get the scalar regime at the end of the series, take
+        `.iloc[-1]`. An empty input returns an empty Series.
     """
-    if len(prices) < window:
-        return 'unknown'
-    prices_arr = np.asarray(prices, dtype=float)
-    sma = float(prices_arr[-window:].mean())
-    recent = float(prices_arr[-1])
-    if recent > sma * (1.0 + threshold):
-        return 'bull'
-    if recent < sma * (1.0 - threshold):
-        return 'bear'
-    return 'sideways'
+    p: pd.Series[float] = pd.Series(np.asarray(prices, dtype=float), dtype=float)
+    sma: pd.Series[float] = p.rolling(window).mean()  # pyright: ignore[reportUnknownMemberType, reportAssignmentType, reportUnknownVariableType]
+
+    # Default to 'unknown', then mark every row that has a valid SMA as
+    # the in-band ('sideways') case, then overwrite out-of-band rows
+    # with 'bull' / 'bear'. NaN-comparison semantics return False, so
+    # the warmup region (where the SMA is NaN) is never reassigned and
+    # 'unknown' is preserved there automatically.
+    regimes: pd.Series[str] = pd.Series('unknown', index=p.index, dtype=object)  # pyright: ignore[reportUnknownArgumentType, reportUnknownMemberType]
+    regimes[sma.notna()] = 'sideways'
+    regimes[p > sma * (1.0 + threshold)] = 'bull'
+    regimes[p < sma * (1.0 - threshold)] = 'bear'
+    return regimes
 
 
 def regime_analysis(
@@ -707,55 +717,55 @@ def regime_analysis(
           - total_pnl: sum of trade pnls that closed in this regime
           - avg_pnl_per_day: total_pnl / days (0 if days == 0)
     """
-    prices_arr = np.asarray(prices, dtype=float)
-    n = len(prices_arr)
+    # Classify the regime at each day using only data up to that day
+    # (no future peeking). classify_regime returns the regime at each
+    # index using prices through that index inclusive; the .shift(1)
+    # is what enforces "use only prices known at the start of day i" —
+    # at index i it surfaces the regime computed from prices[:i]
+    # (yesterday's close and earlier). The shift introduces one
+    # leading NaN at index 0; .fillna('unknown') matches
+    # classify_regime's insufficient-history convention so the warmup
+    # region uniformly reads 'unknown'.
+    regimes: pd.Series[str] = (
+        classify_regime(prices, window, threshold)
+        .shift(1)
+        .fillna('unknown')  # pyright: ignore[reportUnknownMemberType]
+    )
 
-    # Classify the regime at each day using only data up to that day (no
-    # future peeking). regimes[i] = regime on day i, based on prices[:i].
-    #
-    # Examples:
-    #   i=0:   prices[:0]   = []            → "unknown" (no data)
-    #   i=50:  prices[:50]  = first 50 days  → "unknown" (need 200 for SMA200)
-    #   i=199: prices[:199] = first 199 days → "unknown" (still 1 short)
-    #   i=200: prices[:200] = first 200 days → "bull"/"bear"/"sideways"
-    #                                          (first real classification)
-    #   i=500: prices[:500] = first 500 days → uses last 200 of those to classify
-    #
-    # The first `window` entries (i = 0..window-1) will always be "unknown"
-    # since classify_regime returns "unknown" when it has fewer than `window`
-    # prices to compute the SMA.
-    regimes = [
-        classify_regime(prices_arr[:i], window, threshold) for i in range(n)
-    ]
+    # Per-regime day count. value_counts omits regimes with zero days;
+    # reindex restores any missing buckets so all four keys are always
+    # present in the result, matching the original loop's pre-init.
+    # (pandas-stubs' reindex/to_dict overloads degrade to Unknown when
+    # composed off Series[str], same noise pattern as the rolling-vol
+    # chain — we annotate explicitly and suppress.)
+    day_counts: dict[str, int] = (
+        regimes.value_counts()
+        .reindex(['bull', 'bear', 'sideways', 'unknown'], fill_value=0)  # pyright: ignore[reportUnknownMemberType]
+        .to_dict()  # pyright: ignore[reportUnknownMemberType]
+    )
 
-    day_counts: dict[str, int] = {'bull': 0, 'bear': 0, 'sideways': 0, 'unknown': 0}
-    for r in regimes:
-        day_counts[r] += 1
-
-    # Map each date to its index in the price series so we can look up the
-    # regime on a given trade's close date.
-    date_to_idx = {d: i for i, d in enumerate(dates)}
-    regime_pnl: dict[str, float] = {
-        'bull': 0.0, 'bear': 0.0, 'sideways': 0.0, 'unknown': 0.0,
-    }
-    # Bucket each closed trade's pnl into the regime active on its close date.
-    # Trades with pnl == 0 (open events with no realized P&L yet) are skipped.
+    # Bucket each closed trade's pnl into the regime active on its
+    # close date. Trades with pnl == 0 (open events with no realized
+    # P&L) are filtered out up front; trades whose date isn't in
+    # `dates` map to NaN and are dropped by groupby. reindex backfills
+    # any regime that saw no trades with 0.0 so all four keys exist.
     # e.g., trade on a 'bull'-classified day with pnl=$120 →
-    #   regime_pnl['bull'] += 120
-    for trade in trades:
-        pnl = trade.get('pnl', 0)
-        if not pnl:
-            continue
-        idx = date_to_idx.get(trade['date'])
-        if idx is None:
-            continue
-        regime_pnl[regimes[idx]] += float(pnl)
+    #   regime_pnl['bull'] += 120.
+    trades_df = pd.DataFrame(trades, columns=['date', 'pnl'])
+    nonzero = trades_df[trades_df['pnl'] != 0]
+    date_to_regime: dict[str, str] = dict(zip(dates, regimes.tolist()))  # pyright: ignore[reportUnknownArgumentType]
+    regime_pnl: dict[str, float] = (
+        nonzero['pnl']
+        .groupby(nonzero['date'].map(date_to_regime))  # pyright: ignore[reportUnknownMemberType, reportUnknownArgumentType]
+        .sum()
+        .reindex(['bull', 'bear', 'sideways', 'unknown'], fill_value=0.0)  # pyright: ignore[reportUnknownMemberType]
+        .to_dict()  # pyright: ignore[reportUnknownMemberType]
+    )
 
-    # Dict comprehension: loop over each regime and compute summary stats.
-    # e.g., day_counts={'bull': 1690, ...}, regime_pnl={'bull': 17875.84, ...}
-    #   → {'bull': {'days': 1690, 'total_pnl': 17875.84, 'avg_pnl_per_day': 10.58},
-    #      ...}
-    # avg_pnl_per_day guards against division-by-zero for any empty regime.
+    # Build the per-regime summary. avg_pnl_per_day guards against
+    # division-by-zero for any empty regime. day_counts and regime_pnl
+    # both contain all four keys by construction (reindex), so the
+    # dict lookups below are safe.
     return {
         regime: {
             'days': day_counts[regime],
