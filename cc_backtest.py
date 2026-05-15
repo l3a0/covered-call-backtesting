@@ -763,10 +763,11 @@ def regime_analysis(
     # (pandas-stubs' reindex/to_dict overloads degrade to Unknown when
     # composed off Series[str], same noise pattern as the rolling-vol
     # chain — we annotate explicitly and suppress.)
-    day_counts: dict[str, int] = (
+    day_counts: dict[str, int] = cast(
+        'dict[str, int]',
         regimes.value_counts()
         .reindex(['bull', 'bear', 'sideways', 'unknown'], fill_value=0)  # pyright: ignore[reportUnknownMemberType]
-        .to_dict()  # pyright: ignore[reportUnknownMemberType]
+        .to_dict(),  # pyright: ignore[reportUnknownMemberType]
     )
 
     # Bucket each closed trade's pnl into the regime active on its
@@ -779,12 +780,13 @@ def regime_analysis(
     trades_df = pd.DataFrame(trades, columns=['date', 'pnl'])
     nonzero = trades_df[trades_df['pnl'] != 0]
     date_to_regime: dict[str, str] = dict(zip(dates, regimes.tolist()))  # pyright: ignore[reportUnknownArgumentType]
-    regime_pnl: dict[str, float] = (  # pyright: ignore[reportUnknownVariableType]
+    regime_pnl: dict[str, float] = cast(
+        'dict[str, float]',
         nonzero['pnl']
         .groupby(nonzero['date'].map(date_to_regime))  # pyright: ignore[reportUnknownMemberType, reportUnknownArgumentType]
         .sum()
         .reindex(['bull', 'bear', 'sideways', 'unknown'], fill_value=0.0)  # pyright: ignore[reportUnknownMemberType]
-        .to_dict()  # pyright: ignore[reportUnknownMemberType]
+        .to_dict(),  # pyright: ignore[reportUnknownMemberType]
     )
 
     # Build the per-regime summary. avg_pnl_per_day guards against
