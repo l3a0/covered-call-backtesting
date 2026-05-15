@@ -269,9 +269,11 @@ def run_cc_overlay(
     # to 20% — the long-run equity baseline). rolling_vol_series[i] corresponds
     # to log_returns[i], i.e. the return realized on day i+1, so on day_idx d we
     # look up index d-1; day 0 has no return yet and uses the fallback directly.
+    # (pandas-stubs types `Series.rolling()` as `Rolling[Series[Unknown]]` even
+    # when the source dtype is known; same noise pattern as calc_rolling_volatility.)
     log_returns_series = pd.Series(np.diff(np.log(prices)))
-    rolling_vol_series = (
-        log_returns_series.rolling(30, min_periods=3).std(ddof=1) * math.sqrt(252)
+    rolling_vol_series = (  # pyright: ignore[reportUnknownVariableType, reportUnknownMemberType]
+        log_returns_series.rolling(30, min_periods=3).std(ddof=1) * math.sqrt(252)  # pyright: ignore[reportUnknownMemberType]
     ).fillna(0.20)
 
     for day_idx in range(num_days):
@@ -281,7 +283,8 @@ def run_cc_overlay(
         # Look up precomputed 30-day rolling annualized vol; fall back to 20%
         # on day 0 when no return has been realized yet.
         rolling_vol = (
-            float(rolling_vol_series.iloc[day_idx - 1]) if day_idx > 0 else 0.20
+            float(rolling_vol_series.iloc[day_idx - 1])  # pyright: ignore[reportUnknownMemberType, reportUnknownArgumentType]
+            if day_idx > 0 else 0.20
         )
 
         if rolling_vol <= 0:
@@ -475,15 +478,21 @@ def run_cc_overlay(
     net_overlay_pnl_r = round(net_overlay_pnl, 2)
     overlay_costs_r = round(total_premium_collected_r - net_overlay_pnl_r, 2)
 
-    # Max drawdown
-    peak = capital
-    max_dd = 0.0
-    for d in daily_equity:
-        if d['equity'] > peak:
-            peak = d['equity']
-        dd = (peak - d['equity']) / peak * 100
-        if dd > max_dd:
-            max_dd = dd
+    # Max drawdown: track running peak (seeded at starting capital so a
+    # day-1 dip below initial equity still registers a drawdown), then
+    # take the worst peak-to-equity gap as a percentage of peak. cummax
+    # gives the running max across daily equity; clipping at `capital`
+    # ensures the peak never drops below the starting baseline. (Same
+    # pandas-stubs Series[Unknown] noise pattern as the rolling-vol path
+    # — we annotate explicitly to keep the silencing scoped.)
+    equity_series: pd.Series[float] = pd.Series(
+        [d['equity'] for d in daily_equity], dtype=float
+    )
+    if equity_series.empty:
+        max_dd = 0.0
+    else:
+        peak_series = equity_series.cummax().clip(lower=capital)  # pyright: ignore[reportUnknownMemberType]
+        max_dd = float(((peak_series - equity_series) / peak_series * 100).max())  # pyright: ignore[reportUnknownMemberType, reportUnknownArgumentType]
 
     summary: dict[str, Any] = {
         'capital': round(capital, 2),

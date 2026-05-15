@@ -14,11 +14,17 @@ Produces PNGs in docs/figures/ that visualize:
 Run: python make_figures.py
 """
 
+# matplotlib's bundled stubs leave Axes/pyplot member return types and
+# **kwargs as partially-Unknown. Suppress those categories at file level
+# rather than annotating every plot()/hist()/set_xlabel() call.
+# pyright: reportUnknownMemberType=false, reportUnknownArgumentType=false, reportUnknownLambdaType=false
+
 from __future__ import annotations
 
 import csv
 import math
 import os
+from typing import Any, cast
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -56,7 +62,9 @@ def load_msft_csv(path: str) -> tuple[list[str], NDArray[np.float64]]:
     return dates, np.array(prices, dtype=np.float64)
 
 
-def fig1_equity_curves(daily_equity: list[dict], summary: dict) -> Figure:
+def fig1_equity_curves(
+    daily_equity: list[dict[str, Any]], summary: dict[str, Any]
+) -> Figure:
     """Overlay vs. buy-and-hold equity curves over the 10-year window."""
     shares = summary["num_contracts"] * 100
     cash = summary["cash"]
@@ -109,7 +117,9 @@ def fig1_equity_curves(daily_equity: list[dict], summary: dict) -> Figure:
 
 
 def fig2_excess_histogram(
-    daily_equity: list[dict], summary: dict, stats: dict
+    daily_equity: list[dict[str, Any]],
+    summary: dict[str, Any],
+    stats: dict[str, Any],
 ) -> Figure:
     """Histogram of daily excess returns with sample-mean and t-stat annotation."""
     shares = summary["num_contracts"] * 100
@@ -282,8 +292,8 @@ def fig3_bias_variance(
 
 def fig4_t_stat_vs_years(sharpe: float) -> Figure:
     """Expected t-statistic vs. years of data at a fixed Sharpe ratio."""
-    years = np.logspace(0, np.log10(500), 200)
-    t_stats = sharpe * np.sqrt(years)
+    years = cast('NDArray[np.float64]', np.logspace(0, np.log10(500), 200))
+    t_stats = cast('NDArray[np.float64]', sharpe * np.sqrt(years))
 
     years_for_t2 = (2.0 / sharpe) ** 2
     years_for_t3 = (3.0 / sharpe) ** 2
