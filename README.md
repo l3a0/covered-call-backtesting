@@ -73,10 +73,10 @@ CI runs `ruff`, `pyright`, the test suite, and a backtest smoke test on every PR
 
 | File | What it is |
 | --- | --- |
-| [cc_backtest.py](cc_backtest.py#L222) | Backtest engine: Black-Scholes pricing, rolling vol, regime-based IV, day-by-day overlay state machine, Newey-West t-stat reporting on excess returns |
-| [test_cc_backtest.py](test_cc_backtest.py#L34) | Unit and scenario tests covering pricing, the overlay state machine, and the statistics helper |
+| [cc_backtest.py](cc_backtest.py#L201) | Backtest engine: Black-Scholes pricing, rolling vol, regime-based IV, day-by-day overlay state machine, Newey-West t-stat reporting on excess returns |
+| [test_cc_backtest.py](test_cc_backtest.py#L35) | Unit and scenario tests covering pricing, the overlay state machine, and the statistics helper |
 | [download_prices.py](download_prices.py#L11) | yfinance data downloader |
-| [make_figures.py](make_figures.py#L346) | Regenerates the four educational figures embedded in the tutorial into `docs/figures/` |
+| [make_figures.py](make_figures.py#L369) | Regenerates the four educational figures embedded in the tutorial into `docs/figures/` |
 | [msft_10yr_prices.csv](msft_10yr_prices.csv) | Sample MSFT price data, 2016-04 to 2026-04 |
 | [tutorial_covered_call_backtest.md](tutorial_covered_call_backtest.md) | Long-form tutorial — theory, math, code walkthrough, and statistical-significance testing |
 | [docs/figures/](docs/figures/) | Generated PNGs embedded in the tutorial; regenerable from `make_figures.py` |
@@ -85,12 +85,12 @@ CI runs `ruff`, `pyright`, the test suite, and a backtest smoke test on every PR
 ## Where to look for more details
 
 - **How any single piece works (Black-Scholes math, rolling vol, the overlay state machine, walk-forward optimization, robustness checks):** the [tutorial](tutorial_covered_call_backtest.md) is the source of truth. It explains the *why* behind every part of the engine.
-- **Exact behavior of a function:** read [cc_backtest.py](cc_backtest.py#L222) — it's heavily commented and small enough to read end-to-end (link jumps to `run_cc_overlay`, the engine entry point).
-- **What the engine guarantees:** [test_cc_backtest.py](test_cc_backtest.py#L473) has scenario tests for the major trade flows (sell + expire OTM, called away, profit-target close, multi-cycle accumulation).
+- **Exact behavior of a function:** read [cc_backtest.py](cc_backtest.py#L201) — it's heavily commented and small enough to read end-to-end (link jumps to `run_cc_overlay`, the engine entry point).
+- **What the engine guarantees:** [test_cc_backtest.py](test_cc_backtest.py#L474) has scenario tests for the major trade flows (sell + expire OTM, called away, profit-target close, multi-cycle accumulation).
 
 ## Strategy parameters
 
-Edit the `params` dict at the bottom of [cc_backtest.py](cc_backtest.py#L985):
+Edit the `params` dict at the bottom of [cc_backtest.py](cc_backtest.py#L1058):
 
 | Param | Default | Meaning |
 | --- | --- | --- |
