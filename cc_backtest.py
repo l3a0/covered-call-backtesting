@@ -1173,6 +1173,65 @@ def monte_carlo_shuffle(
     }
 
 
+def sensitivity_analysis(
+    dates: list[str] | NDArray[Any],
+    prices: NDArray[np.floating[Any]],
+    params: dict[str, float],
+    sweeps: tuple[tuple[str, tuple[float, ...]], ...] = (
+        ('call_delta', (-0.10, -0.05, 0.0, 0.05, 0.10)),
+        ('close_at_pct', (-0.20, -0.10, 0.0, 0.10, 0.20)),
+    ),
+) -> dict[str, dict[str, Any]]:
+    """Perturb one parameter at a time from its base value and measure
+    the impact on total return — the stability counterpart to a grid
+    search.
+
+    Where a grid search asks "which params are best?", sensitivity
+    analysis asks "how fragile is the optimum we already chose?". Hold
+    every param fixed except one, nudge that one by a small offset in
+    both directions, and watch the total return. If a small tweak moves
+    returns drastically, the chosen value is a knife-edge optimum
+    (overfitting); if returns stay in a similar range, the strategy sits
+    on a plateau and is robust to that parameter.
+
+    Each ``sweeps`` entry is ``(param_name, offsets)``; the offsets are
+    added to ``params[param_name]`` (so an offset of ``0.0`` reproduces
+    the base config). The "robust" verdict is the worst drop from base
+    as a percentage of the base return — single-digit-percent means the
+    strategy isn't fragile to that parameter.
+
+    A production-grade helper would also skip invalid perturbed values
+    (negative ``call_delta``, non-positive ``dte``, ``close_at_pct`` ≤ 0
+    or > 1) before running the backtest; the default sweeps stay inside
+    those bounds, so this implementation doesn't bother.
+
+    Returns ``{param_name: {...}}`` where each inner dict has:
+      ``returns``         list of ``(offset, total_return_pct)``
+      ``base_return``     total_return_pct at offset 0.0
+      ``worst_return``    the lowest return across the sweep
+      ``worst_drop_pct``  (base − worst) / base × 100; < 10 → "robust"
+    """
+    out: dict[str, dict[str, Any]] = {}
+    for name, offsets in sweeps:
+        base_val = params[name]
+        returns: list[tuple[float, float]] = []
+        for off in offsets:
+            # Hold all params fixed except `name`, which shifts by `off`.
+            summary, _, _ = run_cc_overlay(
+                dates, prices, {**params, name: base_val + off}
+            )
+            returns.append((off, float(summary['total_return_pct'])))
+        base_return = next(r for off, r in returns if off == 0.0)
+        worst_return = min(r for _, r in returns)
+        out[name] = {
+            'returns': returns,
+            'base_return': base_return,
+            'worst_return': worst_return,
+            'worst_drop_pct': (base_return - worst_return) / base_return * 100,
+        }
+    return out
+
+
 # ====================
 # 8. Main
 # ====================

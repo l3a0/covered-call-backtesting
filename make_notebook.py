@@ -234,24 +234,23 @@ print(
     f" of {mc['n_completed']} shuffled paths"
 )''',
     "### Sensitivity Analysis: Perturb Each Parameter, See If Results Collapse": '''\
-# Perturb one parameter at a time, watch total return — same sweeps as
-# test_sensitivity_perturbations.
-base = run_cc_overlay(dates, prices, params)[0]["total_return_pct"]
-print(f"base (0.25 delta, 0.75 close): {base:.0f}%")
-for name, offsets in (
-    ("call_delta", (-0.10, -0.05, 0.05, 0.10)),
-    ("close_at_pct", (-0.20, -0.10, 0.10, 0.20)),
-):
-    swept = []
-    worst = base
-    for off in offsets:
-        s, _, _ = run_cc_overlay(dates, prices, {**params, name: params[name] + off})
-        ret = s["total_return_pct"]
-        worst = min(worst, ret)
-        swept.append(f"{off:+.2f}:{ret:.0f}%")
-    drop = (base - worst) / base * 100
-    verdict = "robust" if drop < 10 else "fragile"
-    print(f"  {name:<12} " + "  ".join(swept) + f"   worst drop {drop:.1f}% -> {verdict}")''',
+# Reuse the real cc_backtest.sensitivity_analysis — the exact function
+# test_sensitivity_perturbations pins, so the notebook can't drift from it.
+# Same sweeps: call_delta ±0.05/±0.10, close_at_pct ±0.10/±0.20.
+from cc_backtest import sensitivity_analysis
+
+sens = sensitivity_analysis(dates, prices, params)
+for name, res in sens.items():
+    cells = "  ".join(
+        f"{off:+.2f}:{ret:.0f}%" if off != 0.0 else f"base:{ret:.0f}%"
+        for off, ret in res["returns"]
+    )
+    verdict = "robust" if res["worst_drop_pct"] < 10 else "fragile"
+    print(
+        f"{name:<12} {cells}\\n"
+        f"{'':<12} worst drop from base {res['worst_drop_pct']:.1f}%"
+        f"  ->  {verdict}"
+    )''',
     "### Regime Analysis: Does It Work in Bulls, Bears, and Sideways?": '''\
 # Bucket overlay trade P&L by 200-day-SMA regime — same as
 # test_regime_analysis.
@@ -263,6 +262,27 @@ print(f"{'regime':<9} {'days':>5} {'total P&L':>14} {'$/day':>8}")
 for r in ("bull", "bear", "sideways", "unknown"):
     d = reg[r]
     print(f"{r:<9} {d['days']:>5} {d['total_pnl']:>14,.0f} {d['avg_pnl_per_day']:>8,.0f}")''',
+    "#### Risk-Managed Covered Calls: Stripping Out the Equity-Timing Wiggle": '''\
+# Same trade flow, two modes: naive vs. delta_hedge=1.0. Reproduces the
+# side-by-side table; pinned by TestMsftTenYearRegression.test_significance
+# (naive) and TestMsftRiskManagedRegression.test_significance_uplift (hedged).
+def _excess_stats(p):
+    s, _, eq = run_cc_overlay(dates, prices, p)
+    return compute_statistics(eq, num_contracts=s["num_contracts"], cash=s["cash"])
+
+naive = _excess_stats(params)
+managed = _excess_stats({**params, "delta_hedge": 1.0})
+rows = (
+    ("Annualized excess return", "ann_excess_return_pct", "{:+.3f}%"),
+    ("Annualized excess vol", "ann_excess_vol_pct", "{:.2f}%"),
+    ("Sharpe of excess return", "sharpe_excess", "{:+.3f}"),
+    ("t-stat (Newey-West)", "t_stat_newey_west", "{:+.2f}"),
+)
+print(f"{'Metric':<26} {'Naive CC':>12} {'Risk-Managed':>14}")
+for label, key, fmt in rows:
+    print(f"{label:<26} {fmt.format(naive[key]):>12} {fmt.format(managed[key]):>14}")
+print(f"{'Clears t = 2 bar?':<26} {str(naive['passes_t_2']):>12} "
+      f"{str(managed['passes_t_2']):>14}")''',
 }
 
 SETUP_CODE = '''\

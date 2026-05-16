@@ -24,6 +24,7 @@ from cc_backtest import (
     normal_pdf,
     regime_analysis,
     run_cc_overlay,
+    sensitivity_analysis,
     walk_forward_optimization,
 )
 
@@ -1203,51 +1204,41 @@ class TestMsftTenYearRegression:
         param: str,
         offsets_and_returns: list[tuple[float, float]],
     ) -> None:
-        """Perturbing one param at a time reproduces the tutorial's sweep numbers.
+        """Pin cc_backtest.sensitivity_analysis on MSFT 2016-2026.
 
-        Sensitivity analysis: for each parameter, vary it by a fixed
-        offset from base and measure impact on total return. *High*
-        sensitivity (large swings under small perturbations) suggests
-        overfitting — the optimum is a knife edge rather than a plateau.
-        A robust strategy should stay in a similar range across the sweep.
-
-        Each variant runs the full overlay with all params held fixed
-        except the one being perturbed:
+        The perturb-one-param-at-a-time sweep and its rationale now live
+        in ``cc_backtest.sensitivity_analysis`` (the notebook companion
+        calls the same function, so the two can't drift). This test pins
+        its outputs at the tutorial's settings:
           - call_delta sweep at ±0.05 / ±0.10 from base=0.25
           - close_at_pct sweep at ±0.10 / ±0.20 from base=0.75
 
-        A real sensitivity helper would also skip invalid parameter
-        values (negative call_delta, non-positive dte, close_at_pct ≤ 0
-        or > 1) before running the backtest; none of the sweeps below
-        hit those edges, so this test doesn't bother.
-
-        These pin both the individual returns and the "robust" verdict:
-        the worst drop from base stays single-digit-percent of the base
-        return — the "Swing" interpretation in the tutorial's example
-        output ("robust" if the swing is small relative to base).
+        It pins both the individual returns per offset and the "robust"
+        verdict: the worst drop from base stays single-digit-percent of
+        the base return — the "Swing" interpretation in the tutorial's
+        example output ("robust" if the swing is small relative to base).
+        Double-digit-% drops would indicate the chosen value is a
+        knife-edge optimum (overfitting) rather than a plateau.
         """
         dates, prices = data
-        base = _TUTORIAL_PARAMS[param]
-        returns: list[float] = []
-        for offset, expected in offsets_and_returns:
-            # Hold all params fixed except the one being perturbed; only
-            # `param` shifts by `offset` from its base value. The expected
-            # total_return_pct is pinned per offset so a regression here
-            # surfaces as a test failure rather than a silent drift in
-            # the tutorial's worked example.
-            test_params = {**_TUTORIAL_PARAMS, param: base + offset}
-            summary, _, _ = run_cc_overlay(dates, prices, test_params)
-            assert summary['total_return_pct'] == pytest.approx(expected, abs=0.5)
-            returns.append(summary['total_return_pct'])
-        base_return = next(
-            r for (off, _), r in zip(offsets_and_returns, returns) if off == 0.0
-        )
+        offsets = tuple(off for off, _ in offsets_and_returns)
+        result = sensitivity_analysis(
+            dates, prices, _TUTORIAL_PARAMS, sweeps=((param, offsets),)
+        )[param]
+
+        # Each offset's total_return_pct is pinned so a regression here
+        # surfaces as a test failure rather than a silent drift in the
+        # tutorial's worked example.
+        for (offset, expected), (got_off, got_ret) in zip(
+            offsets_and_returns, result['returns']
+        ):
+            assert got_off == offset
+            assert got_ret == pytest.approx(expected, abs=0.5)
+
         # Worst drop from base, as a percentage of base. Single-digit-%
         # means the strategy isn't fragile to this parameter — the
-        # "robust" verdict in the tutorial. Double-digit % drops would
-        # indicate the chosen value is a knife-edge optimum.
-        worst_drop_pct = (base_return - min(returns)) / base_return * 100
-        assert worst_drop_pct < 10.0  # "robust": single-digit-percent drop
+        # "robust" verdict in the tutorial.
+        assert result['worst_drop_pct'] < 10.0  # single-digit-% drop
 
     def test_monte_carlo_shuffle(
         self, data: tuple[list[str], np.ndarray[Any, np.dtype[np.float64]]]
