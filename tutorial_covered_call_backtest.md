@@ -548,39 +548,7 @@ Some wheel traders use a trend filter to decide *when* to sell options. The key 
 
 > **Note — the big tradeoff vs. buy-and-hold:** Premiums are small and steady; rallies are rare and huge. If you repeatedly get called away during strong uptrends, the capped upside compounds against you, and the strategy can materially **underperform a pure buy-and-hold** of the same stock. Covered calls trade lottery-ticket upside for consistent income — that's the deal, and it only looks good if you actually prefer smoother returns to maximizing total return.
 
-```python
-def sma(prices, window):
-    """Simple moving average: take the last `window` prices, return their average."""
-    # prices[-window:] grabs the last N prices from the list
-    # e.g. if window=50 and prices has 1000 entries, this averages the last 50
-    return np.mean(prices[-window:])
-
-def is_uptrend(prices, sma_short=50, sma_long=200):
-    """
-    Check if stock is in uptrend using golden cross.
-    
-    Returns:
-        True if SMA50 > SMA200 (uptrend), else False
-    """
-    if len(prices) < sma_long:
-        return True  # Not enough data; assume neutral
-    
-    sma_50 = sma(prices, sma_short)
-    sma_200 = sma(prices, sma_long)
-    
-    return sma_50 > sma_200
-```
-
-**In the overlay:**
-
-```python
-if trend_filter_enabled and not is_uptrend(prices):
-    # CSP phase: skip selling puts in downtrend (avoid assignment into falling stock)
-    # CC phase: you'd typically STILL sell calls here to reduce cost basis
-    return 'idle', None, None
-```
-
-**Empirical finding (from our walk-forward results):** The trend filter didn't help much. The filter's job is to pause CSPs when SMA50 < SMA200 (a downtrend) so you don't get assigned into a falling stock — but the wheel is defensive enough that even entering in a downtrend works out: premiums cushion the drawdown, and once you're assigned you just start collecting CC income on the way back up. We'll include the filter as an option but not use it by default.
+None of this lives in the engine — `sma`/`is_uptrend` sketch the golden-cross idea but aren't functions in the codebase. **Empirical finding (from the Part 4 walk-forward):** the filter didn't earn its keep. Its job is to pause CSPs when SMA50 < SMA200 so you don't get assigned into a falling stock, but the wheel is defensive enough that entering in a downtrend still works out — premiums cushion the drawdown, and once assigned you collect CC income on the recovery. So [`cc_backtest.py::run_cc_overlay`](https://github.com/l3a0/covered-call-backtesting/blob/main/cc_backtest.py#L201) ships **no entry trend filter at all**: in the CC phase it sells in every regime, exactly as the CSP-vs-CC reasoning above argues.
 
 ### The Run_cc_overlay() Function: Full Walkthrough
 
