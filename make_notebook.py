@@ -76,6 +76,30 @@ valid = rolling_vol[~np.isnan(rolling_vol)]
 mix = collections.Counter(detect_regime(float(v)) for v in valid)
 for r in ("low", "normal", "high"):
     print(f"  {r:<6} {mix[r]:4d} days ({mix[r] / len(valid):5.1%})")''',
+    "### The State Machine: OPEN → Check → Handle → Reset": '''\
+# The real engine: run_cc_overlay inlines exactly this state machine.
+# (run_cc_overlay_day above is a teaching sketch — never called by the codebase.)
+import collections
+
+summary, trades, _ = run_cc_overlay(dates, prices, params)
+
+# The engine's trade actions map 1:1 onto the diagram's branches:
+#   sell        IDLE -> OPEN: sold a 0.25-delta call
+#   close       profit target hit (75% of premium captured)
+#   close_itm   deep-ITM assignment risk (delta > 0.70)
+#   expiration  reached expiry: assigned if ITM, else expired worthless
+counts = collections.Counter(t["action"] for t in trades)
+for action in ("sell", "close", "close_itm", "expiration"):
+    print(f"  {action:<11} {counts[action]:4d}")
+
+print("\\nFirst 4 trade-state transitions:")
+for t in trades[:4]:
+    extra = (
+        f" strike ${t['strike']:.0f}"
+        if t["action"] == "sell"
+        else f" pnl ${t['pnl']:+.2f}"
+    )
+    print(f"  {t['date']}  {t['action']:<11}{extra}")''',
 }
 
 SETUP_CODE = '''\
