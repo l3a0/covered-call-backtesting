@@ -218,6 +218,23 @@ for c in combos[:3]:
 print("   ...")
 for c in combos[-2:]:
     print("  ", c)''',
+    "## Part 5: Robustness Checks — Proving It's Not Luck": '''\
+# Every robustness claim in Part 5 is pinned by TestMsftTenYearRegression
+# (Monte Carlo, sensitivity, regime, walk-forward, Newey-West). Run it and
+# show pytest's real output. ~15s — the heaviest cell in the notebook.
+import subprocess
+import sys
+
+proc = subprocess.run(
+    [
+        sys.executable, "-m", "pytest",
+        "test_cc_backtest.py::TestMsftTenYearRegression", "-q", "--no-header",
+    ],
+    capture_output=True,
+    text=True,
+)
+print(proc.stdout.strip() or proc.stderr.strip())
+print(f"\\npytest exit code: {proc.returncode}  (0 = all Part 5 checks pass)")''',
 }
 
 SETUP_CODE = '''\
