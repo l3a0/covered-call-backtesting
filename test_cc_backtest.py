@@ -1369,6 +1369,10 @@ class TestMsftTenYearRegression:
             gap is the cost of not having hindsight; the walk-forward
             number is the return you'd have actually achieved running
             this strategy in real time.
+          - Same-span buy-and-hold is ~467% (not the README's 646%,
+            which is the full 10y sample). Pinned too, so prose can
+            anchor the overlay's honest edge over buy-and-hold (~16 pp
+            walk-forward) without quoting an unverified baseline.
 
         Total runtime is a couple of seconds (15 windows × 27
         combos = 405 train backtests on 504-day windows).
@@ -1443,3 +1447,10 @@ class TestMsftTenYearRegression:
         # Deterministic single run_cc_overlay call — pin to the same
         # precision as the other headline total_return_pct regressions.
         assert fixed_summary['total_return_pct'] == pytest.approx(563.04, abs=0.05)
+        # Same-span buy-and-hold baseline. The tutorial and blog quote the
+        # 483%/563% overlay returns against the README's 646% buy-and-hold,
+        # which is the *full 10y sample* — comparing them invites the wrong
+        # conclusion (that the overlay lost). The correct same-span baseline
+        # is ~467%, so the honest walk-forward edge over buy-and-hold is only
+        # ~16 pp. Pin it so that framing is CI-verified wherever prose uses it.
+        assert fixed_summary['buy_hold_return_pct'] == pytest.approx(466.57, abs=0.05)
