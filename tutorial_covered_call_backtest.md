@@ -493,33 +493,7 @@ This is where backtests often lie.
 - You pay $0.65 per contract to close
 - You have slippage: the bid-ask spread might mean you sell the call for 95¢ but it's worth $1.00
 
-In our model:
-
-```python
-def apply_transaction_costs(premium, cost_per_contract=0.65, slippage_pct=0.03):
-    """
-    Reduce premium by transaction costs (per-share basis).
-    
-    Args:
-        premium: option premium per share
-        cost_per_contract: commission per contract ($0.65 typical)
-        slippage_pct: bid-ask slippage as % of premium
-    
-    Returns:
-        net_premium: premium after costs (per share)
-    """
-    # Slippage: reduce by 3% of the premium
-    slippage_cost = premium * slippage_pct
-    
-    # Commission: per-contract cost
-    # If we're selling 1 contract (100 shares), commission is $0.65
-    # Per-share basis: 0.65 / 100 = $0.0065
-    commission_per_share = cost_per_contract / 100.0
-    
-    net_premium = premium - slippage_cost - commission_per_share
-    
-    return net_premium
-```
+The engine doesn't wrap this in a helper — it's one line inside [`cc_backtest.py::run_cc_overlay`](https://github.com/l3a0/covered-call-backtesting/blob/main/cc_backtest.py#L335): `net_premium = premium * (1 - 0.03) - 0.0065` on the sell side (3% slippage; $0.65/contract commission = $0.0065/share), with a matching `- 0.65 * num_contracts` charged when the call is bought back to close. If costs would exceed the credit — a near-worthless deep-OTM call — it skips the trade rather than open at a loss.
 
 **Example:**
 

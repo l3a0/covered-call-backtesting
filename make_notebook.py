@@ -100,6 +100,34 @@ for t in trades[:4]:
         else f" pnl ${t['pnl']:+.2f}"
     )
     print(f"  {t['date']}  {t['action']:<11}{extra}")''',
+    "### Transaction Costs: Commission ($0.65/contract) + Slippage (3% of Premium)": '''\
+# Transaction costs aren't a helper — run_cc_overlay inlines them. This is
+# the exact sell-side line from cc_backtest.py#L335:
+#     net_premium = premium * (1 - 0.03) - 0.0065
+# (3% slippage; $0.65/contract commission = $0.0065/share). Run it on a
+# range of gross premiums:
+SLIPPAGE = 0.03
+COMMISSION_PER_SHARE = 0.65 / 100
+
+hdr = f"{'gross $/sh':>10} {'-slippage':>10} {'-commission':>12} {'net $/sh':>10} {'net $/contract':>15}"
+print(hdr)
+for gross in (0.05, 0.50, 0.89, 1.00, 2.50):
+    net = gross * (1 - SLIPPAGE) - COMMISSION_PER_SHARE
+    print(
+        f"{gross:>10.2f} {gross * SLIPPAGE:>10.4f} {COMMISSION_PER_SHARE:>12.4f}"
+        f" {net:>10.4f} {net * 100:>15.2f}"
+    )
+
+# The section's worked example: $1.00 gross -> $0.9635 net/share
+assert abs((1.00 * (1 - SLIPPAGE) - COMMISSION_PER_SHARE) - 0.9635) < 1e-9
+print("\\n$1.00 gross -> $0.9635 net/share  (matches the worked example)")
+
+# Negative-net guard: deep-OTM calls where costs exceed the credit are skipped
+tiny = 0.005
+print(
+    f"${tiny} gross -> {tiny * (1 - SLIPPAGE) - COMMISSION_PER_SHARE:+.4f} net/share"
+    f"  -> run_cc_overlay refuses to open (net_premium <= 0)"
+)''',
 }
 
 SETUP_CODE = '''\
