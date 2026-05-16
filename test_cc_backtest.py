@@ -1362,9 +1362,13 @@ class TestMsftTenYearRegression:
           - Cumulative OOS compound return (per-period 6mo returns
             chained) is ~483% over 7.5 years — substantially less
             than the ~563% fixed-params return over the same span.
-            That gap is the cost of not having hindsight; the
-            walk-forward number is the return you'd have actually
-            achieved running this strategy in real time.
+            Both halves of that comparison are pinned here (483%
+            from the chained OOS curve, 563% from the fixed defaults
+            run over the identical span), so the 483-vs-563 claim
+            the tutorial and blog draw is fully CI-verified. That
+            gap is the cost of not having hindsight; the walk-forward
+            number is the return you'd have actually achieved running
+            this strategy in real time.
 
         Total runtime is a couple of seconds (15 windows × 27
         combos = 405 train backtests on 504-day windows).
@@ -1422,3 +1426,20 @@ class TestMsftTenYearRegression:
         # Pinned around ~483%, allow a few pp of slack for floating-point
         # variation in the run-to-run results.
         assert cumulative_pct == pytest.approx(483.0, abs=5.0)
+
+        # The other half of the comparison the tutorial (Part 4) and the
+        # blog series quote: the fixed __main__ defaults run over the
+        # *same* OOS span. Until now only the 483% walk-forward side was
+        # pinned, so the 563% fixed-params number could drift silently in
+        # three prose surfaces. Pin it here so the cross-surface sweep
+        # keeps it honest. Derive the span from the asserted OOS bounds
+        # (2018-04-11 → 2025-10-11) rather than hardcoding.
+        oos_lo, oos_hi = records[0]['test_start'], records[-1]['test_end']
+        span_idx = [i for i, d in enumerate(dates) if oos_lo <= d < oos_hi]
+        span_dates = dates[span_idx[0]:span_idx[-1] + 1]
+        span_prices = prices[span_idx[0]:span_idx[-1] + 1]
+        assert len(span_dates) == len(oos_equity)  # same window as the OOS curve
+        fixed_summary, _, _ = run_cc_overlay(span_dates, span_prices, _TUTORIAL_PARAMS)
+        # Deterministic single run_cc_overlay call — pin to the same
+        # precision as the other headline total_return_pct regressions.
+        assert fixed_summary['total_return_pct'] == pytest.approx(563.04, abs=0.05)
