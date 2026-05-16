@@ -481,69 +481,7 @@ RESET (sold and closed; ready for next call)
   └─ [Wait 1 day, then go back to IDLE]
 ```
 
-Sketched as a per-day handler (the real `run_cc_overlay` inlines this loop body — `run_cc_overlay_day` is illustrative, not a function in the codebase):
-
-```python
-def run_cc_overlay_day(
-    current_date,
-    position_state,  # None, or {'entry_price', 'entry_date', 'dte', ...}
-    current_price,
-    rolling_vol,
-    current_rate,
-    call_delta=0.20,
-    close_at_pct=0.75,
-):
-    """
-    Decide what to do with the covered call position on this day.
-    
-    Returns:
-        action: 'idle', 'sell', 'close', 'assign' or 'hold'
-        premium: if 'sell', the premium collected
-        result_price: if 'close' or 'assign', the result price
-    """
-    
-    # Case 1: No open position, check if we should sell
-    if position_state is None:
-        # Decide on strike
-        T = 30 / 252  # 30 DTE is our target (252 trading days/year)
-        strike = find_strike_for_delta(
-            current_price, T, current_rate, rolling_vol, call_delta, option_type='call'
-        )
-        premium = bs_price(current_price, strike, T, current_rate, rolling_vol, option_type='call')
-        
-        return 'sell', premium, strike
-    
-    # Case 2: Open position; check conditions
-    premium_collected = position_state['premium']
-    strike = position_state['strike']
-    entry_date = position_state['entry_date']
-    dte = position_state['dte']
-    
-    # Recalculate call value today
-    T_remaining = dte / 252
-    current_call_value = bs_price(current_price, strike, T_remaining, current_rate, rolling_vol, option_type='call')
-    
-    # Profit check: has enough premium been captured?
-    # close_at_pct = 0.75 means close when option worth <= 25% of what we sold it for
-    if current_call_value <= premium_collected * (1 - close_at_pct):
-        return 'close', current_call_value, strike
-    
-    # Expiration check
-    if dte <= 0:
-        if current_price >= strike:
-            return 'called_away', current_call_value, strike
-        else:
-            return 'expired_otm', current_call_value, strike
-    
-    # Condition: Call is deeply ITM (delta > 0.70)? Consider closing.
-    if current_price > strike:
-        delta_today = bs_delta(current_price, strike, T_remaining, current_rate, rolling_vol, option_type='call')
-        if delta_today > 0.70:
-            return 'close', current_call_value, strike
-    
-    # Otherwise, hold
-    return 'hold', None, None
-```
+The real engine has no separate per-day function — [`cc_backtest.py::run_cc_overlay`](https://github.com/l3a0/covered-call-backtesting/blob/main/cc_backtest.py#L201) inlines exactly this loop body, with the four transitions above as its `if`/`elif` branches. *The Run_cc_overlay() Function: Full Walkthrough*, later in this part, traces it line by line.
 
 ### Transaction Costs: Commission ($0.65/contract) + Slippage (3% of Premium)
 

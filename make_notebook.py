@@ -77,8 +77,8 @@ mix = collections.Counter(detect_regime(float(v)) for v in valid)
 for r in ("low", "normal", "high"):
     print(f"  {r:<6} {mix[r]:4d} days ({mix[r] / len(valid):5.1%})")''',
     "### The State Machine: OPEN → Check → Handle → Reset": '''\
-# The real engine: run_cc_overlay inlines exactly this state machine.
-# (run_cc_overlay_day above is a teaching sketch — never called by the codebase.)
+# The real engine: run_cc_overlay inlines exactly this state machine
+# (the four transitions above are its if/elif branches).
 import collections
 
 summary, trades, _ = run_cc_overlay(dates, prices, params)
