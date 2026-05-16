@@ -1089,7 +1089,92 @@ def walk_forward_optimization(
 
 
 # ====================
-# 7. Main
+# 7. Monte Carlo Shuffle
+# ====================
+
+def monte_carlo_shuffle(
+    dates: list[str] | NDArray[Any],
+    prices: NDArray[np.floating[Any]],
+    params: dict[str, float],
+    n_shuffles: int = 500,
+    seed: int = 42,
+) -> dict[str, Any]:
+    """Monte Carlo randomization test: shuffle the daily returns, rebuild
+    a synthetic price path from each shuffled sequence, re-run the overlay
+    on it, and compare the real ordered path's return to that distribution.
+
+    Why it works: real prices have a specific *order* — trends, mean
+    reversion, volatility clusters. Shuffling destroys the order while
+    keeping the exact same set of daily returns (same mean, vol, and
+    distribution). If the overlay profits on both real and shuffled paths,
+    it's capturing statistical *properties* of the returns (those survive
+    shuffling). If it only works on the real path, it was exploiting the
+    specific *sequence* — overfitting or luck. A high percentile (80+)
+    means genuine skill; ~50 means random ordering does just as well.
+
+    Returns a dict:
+      ``real_return``  total_return_pct on the real (ordered) path
+      ``mc_returns``   list of total_return_pct, one per completed shuffle
+      ``mc_mean``      mean of ``mc_returns``
+      ``mc_max``       best shuffled path's return
+      ``percentile``   % of shuffled paths the real path beat (0-100)
+      ``n_completed``  shuffles that didn't blow up (== n_shuffles here)
+    """
+    import random  # local: keeps the module's top-level import surface unchanged
+
+    # Baseline: the real, ordered price path.
+    real_summary, _, _ = run_cc_overlay(dates, prices, params)
+    real_return = float(real_summary['total_return_pct'])
+
+    # Daily simple returns from the real series.
+    daily_returns = [
+        float((prices[i] - prices[i - 1]) / prices[i - 1])
+        for i in range(1, len(prices))
+    ]
+
+    rng = random.Random(seed)
+    mc_returns: list[float] = []
+    for _ in range(n_shuffles):
+        # Shuffle preserves the distribution, changes only the sequence.
+        shuffled = daily_returns.copy()
+        rng.shuffle(shuffled)
+
+        # Rebuild a price path: start at the real first price, then
+        # chain-multiply each return. (1 + ret) is the daily multiplier
+        # (+0.02 -> 1.02, -0.01 -> 0.99). Same moves, different order.
+        synthetic = [float(prices[0])]
+        for ret in shuffled:
+            synthetic.append(synthetic[-1] * (1 + ret))
+
+        # A few shuffled paths can blow up the backtest (a compounded
+        # crash to <= 0 price, a flat stretch -> zero vol -> div-by-zero
+        # in Black-Scholes). Skipping a handful out of hundreds doesn't
+        # move the distribution; at seed=42 on the bundled data none do.
+        try:
+            mc_summary, _, _ = run_cc_overlay(
+                dates, np.array(synthetic, dtype=np.float64), params
+            )
+            mc_returns.append(float(mc_summary['total_return_pct']))
+        except Exception:
+            continue
+
+    # Percentile: how many shuffles did the real path beat? Count the
+    # shuffles that did *worse* than real, as a fraction of completed
+    # shuffles. 100 -> real beat every shuffle.
+    worse = sum(1 for r in mc_returns if r < real_return)
+    n = len(mc_returns)
+    return {
+        'real_return': real_return,
+        'mc_returns': mc_returns,
+        'mc_mean': sum(mc_returns) / n if n else 0.0,
+        'mc_max': max(mc_returns) if mc_returns else 0.0,
+        'percentile': int(100 * worse / n) if n else 0,
+        'n_completed': n,
+    }
+
+
+# ====================
+# 8. Main
 # ====================
 
 if __name__ == '__main__':

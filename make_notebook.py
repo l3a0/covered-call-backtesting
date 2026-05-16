@@ -218,23 +218,51 @@ for c in combos[:3]:
 print("   ...")
 for c in combos[-2:]:
     print("  ", c)''',
-    "## Part 5: Robustness Checks — Proving It's Not Luck": '''\
-# Every robustness claim in Part 5 is pinned by TestMsftTenYearRegression
-# (Monte Carlo, sensitivity, regime, walk-forward, Newey-West). Run it and
-# show pytest's real output. ~15s — the heaviest cell in the notebook.
-import subprocess
-import sys
+    "### Monte Carlo Simulation: Shuffle Daily Returns, Rebuild Price Paths": '''\
+# Reuse the real cc_backtest.monte_carlo_shuffle — the exact function
+# test_monte_carlo_shuffle pins, so the notebook can't drift from it.
+# ~12s, the heaviest cell (500 backtests).
+from cc_backtest import monte_carlo_shuffle
 
-proc = subprocess.run(
-    [
-        sys.executable, "-m", "pytest",
-        "test_cc_backtest.py::TestMsftTenYearRegression", "-q", "--no-header",
-    ],
-    capture_output=True,
-    text=True,
+mc = monte_carlo_shuffle(dates, prices, params)  # defaults: 500 paths, seed=42
+print(
+    f"real {mc['real_return']:.0f}%  vs  MC mean {mc['mc_mean']:.0f}%"
+    f"  (max {mc['mc_max']:.0f}%)  ->  percentile {mc['percentile']}"
 )
-print(proc.stdout.strip() or proc.stderr.strip())
-print(f"\\npytest exit code: {proc.returncode}  (0 = all Part 5 checks pass)")''',
+print(
+    f"the real ordered path beats {mc['percentile']}%"
+    f" of {mc['n_completed']} shuffled paths"
+)''',
+    "### Sensitivity Analysis: Perturb Each Parameter, See If Results Collapse": '''\
+# Perturb one parameter at a time, watch total return — same sweeps as
+# test_sensitivity_perturbations.
+base = run_cc_overlay(dates, prices, params)[0]["total_return_pct"]
+print(f"base (0.25 delta, 0.75 close): {base:.0f}%")
+for name, offsets in (
+    ("call_delta", (-0.10, -0.05, 0.05, 0.10)),
+    ("close_at_pct", (-0.20, -0.10, 0.10, 0.20)),
+):
+    swept = []
+    worst = base
+    for off in offsets:
+        s, _, _ = run_cc_overlay(dates, prices, {**params, name: params[name] + off})
+        ret = s["total_return_pct"]
+        worst = min(worst, ret)
+        swept.append(f"{off:+.2f}:{ret:.0f}%")
+    drop = (base - worst) / base * 100
+    verdict = "robust" if drop < 10 else "fragile"
+    print(f"  {name:<12} " + "  ".join(swept) + f"   worst drop {drop:.1f}% -> {verdict}")''',
+    "### Regime Analysis: Does It Work in Bulls, Bears, and Sideways?": '''\
+# Bucket overlay trade P&L by 200-day-SMA regime — same as
+# test_regime_analysis.
+from cc_backtest import regime_analysis
+
+_, trades, _ = run_cc_overlay(dates, prices, params)
+reg = regime_analysis(dates, prices, trades)
+print(f"{'regime':<9} {'days':>5} {'total P&L':>14} {'$/day':>8}")
+for r in ("bull", "bear", "sideways", "unknown"):
+    d = reg[r]
+    print(f"{r:<9} {d['days']:>5} {d['total_pnl']:>14,.0f} {d['avg_pnl_per_day']:>8,.0f}")''',
 }
 
 SETUP_CODE = '''\
