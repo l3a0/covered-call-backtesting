@@ -672,49 +672,15 @@ Finally, stitch all testing results together into one equity curve.
 
 ### The Parameter Grid: What We Search Over and Why
 
-```python
-param_grid = {
-    'call_delta': [0.15, 0.20, 0.25],
-    'dte': [21, 30, 45],
-    'close_at_pct': [0.50, 0.75, 1.0],
-}
+The walk-forward optimizer searches a small grid of three parameters:
 
-# Why these ranges?
-# call_delta: 0.15 = conservative (rarely called away), 0.25 = aggressive (more premium)
-# dte: 21 = fast-moving, frequent sales; 45 = slower, higher premiums
-# close_at_pct: 0.50 = close when 50% of premium captured; 1.0 = hold to expiry
-#
-# Note: put_delta is NOT included here. This is a covered call overlay
-# backtest — we already own the shares and are only selling calls. The
-# put_delta parameter belongs to the CSP (cash-secured put) entry phase
-# of the full wheel strategy, which we aren't testing here.
+- **`call_delta`** — `[0.15, 0.20, 0.25]`. Lower is conservative (rarely called away); higher collects more premium but assigns more often.
+- **`dte`** — `[21, 30, 45]`. Shorter means faster, more frequent sales; longer means richer premiums per trade.
+- **`close_at_pct`** — `[0.50, 0.75, 1.00]`. Close once this fraction of the premium has been captured; `1.00` holds to expiry.
 
-def param_combinations(grid):
-    """
-    Turn a dict of lists into every possible combination.
-    
-    Input:  {'call_delta': [0.15, 0.20], 'dte': [21, 30]}
-    Output: [{'call_delta': 0.15, 'dte': 21},
-             {'call_delta': 0.15, 'dte': 30},
-             {'call_delta': 0.20, 'dte': 21},
-             {'call_delta': 0.20, 'dte': 30}]
-    
-    Each factor in the product is the number of options for one parameter:
-      call_delta:   3 choices ([0.15, 0.20, 0.25])
-      dte:          3 choices ([21, 30, 45])
-      close_at_pct: 3 choices ([0.50, 0.75, 1.0])
-    Total: 3 × 3 × 3 = 27 combos. This generates all 27 parameter sets
-    so the optimizer can try each one.
-    """
-    import itertools
-    
-    keys = list(grid.keys())           # ['call_delta', 'dte', 'close_at_pct']
-    values = list(grid.values())       # [[0.15, 0.20, 0.25], [21, 30, 45], ...]
-    
-    for combo in itertools.product(*values):  # itertools.product gives every combination
-        yield dict(zip(keys, combo))          # zip pairs each key with one value from the combo
-        # e.g., zip(['call_delta', 'dte'], (0.15, 21)) → {'call_delta': 0.15, 'dte': 21}
-```
+That's 3 × 3 × 3 = **27 parameter sets**. There's deliberately no `put_delta` axis: this is a covered-call overlay — we already own the shares and only sell calls, so `put_delta` belongs to the CSP (cash-secured put) entry phase of the full wheel, which we aren't testing here.
+
+Expanding the grid into all 27 combinations is one Cartesian product — [`cc_backtest.py::_param_combinations`](https://github.com/l3a0/covered-call-backtesting/blob/main/cc_backtest.py#L873) — which `walk_forward_optimization` loops over on each training window.
 
 ### How to Stitch Out-of-Sample Results into a Single Equity Curve
 

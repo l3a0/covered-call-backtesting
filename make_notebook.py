@@ -201,6 +201,23 @@ print(
     "would not have gated a single covered-call trade here — which is why\\n"
     "the walk-forward search found the entry trend filter didn't earn its keep."
 )''',
+    "### The Parameter Grid: What We Search Over and Why": '''\
+# Expand the 3x3x3 grid with the real helper the optimizer uses.
+from cc_backtest import _param_combinations
+
+grid = {
+    "call_delta": [0.15, 0.20, 0.25],
+    "dte": [21, 30, 45],
+    "close_at_pct": [0.50, 0.75, 1.00],
+}
+combos = _param_combinations(grid)
+sizes = " x ".join(str(len(v)) for v in grid.values())
+print(f"{sizes} = {len(combos)} parameter sets")
+for c in combos[:3]:
+    print("  ", c)
+print("   ...")
+for c in combos[-2:]:
+    print("  ", c)''',
 }
 
 SETUP_CODE = '''\
