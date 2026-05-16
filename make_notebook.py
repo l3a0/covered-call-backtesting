@@ -12,6 +12,9 @@ truth. This script parses it into notebook cells so the two never drift:
   * Every ``![...](docs/figures/NN_*.png)`` embed is replaced by the
     matching chart-generation call from `make_figures.py`, so the chart
     code is visible and the figure renders inline when the cell runs.
+  * Sections that *link* to code instead of inlining it (so there's no
+    fenced block to convert) get a generated demo cell that runs the
+    linked helpers — see ``LINKED_CODE_DEMOS``.
 
 A setup cell at the top clones the repo and pip-installs when running on
 Google Colab (no-op locally), then imports the engine's public API.
@@ -41,6 +44,39 @@ FIGURE_CALLS: dict[str, str] = {
 }
 
 IMAGE_RE = re.compile(r"^!\[.*\]\((?:\./)?docs/figures/([0-9A-Za-z_]+\.png)\)\s*$")
+
+# Some tutorial sections *link* to code in cc_backtest.py instead of inlining
+# it (the repo's "linked, test-pinned implementations" convention), so the
+# converter sees no fenced block to turn into a runnable cell. For those, map
+# the exact section heading -> a short demo that exercises the linked helpers
+# on the bundled MSFT data. The demo cell is emitted right after the section's
+# prose. Same single-source idea as FIGURE_CALLS: the runnable code lives here
+# in the generator, not in the tutorial markdown.
+LINKED_CODE_DEMOS: dict[str, str] = {
+    "### The IV Proxy: Why a Regime-Based Multiplier Works": '''\
+# Run the linked helpers on the bundled MSFT data:
+#   calc_rolling_volatility  ->  detect_regime  ->  estimate_iv
+# (the three cc_backtest.py functions this section links to)
+import collections
+
+rolling_vol = calc_rolling_volatility(prices, window=30)
+
+# Most recent day with a valid (non-NaN warm-up) rolling vol
+i = int(np.flatnonzero(~np.isnan(rolling_vol))[-1])
+hv = float(rolling_vol[i])
+regime = detect_regime(hv)
+iv = estimate_iv(hv)
+print(
+    f"{dates[i]}  30-day HV {hv:6.2%}  ->  regime {regime:<6}"
+    f"  ->  IV estimate {iv:6.2%}  ({iv / hv:.1f}x)"
+)
+
+# Regime mix across the whole sample (multipliers: high 1.1 / normal 1.3 / low 1.5)
+valid = rolling_vol[~np.isnan(rolling_vol)]
+mix = collections.Counter(detect_regime(float(v)) for v in valid)
+for r in ("low", "normal", "high"):
+    print(f"  {r:<6} {mix[r]:4d} days ({mix[r] / len(valid):5.1%})")''',
+}
 
 SETUP_CODE = '''\
 # === Setup — runs anywhere; clones + installs only on Google Colab ===
@@ -167,6 +203,7 @@ def build_cells(md: str) -> list[dict]:
     cells: list[dict] = [md_cell(INTRO_MD), code_cell(SETUP_CODE),
                          code_cell(DATA_PREP_CODE)]
     buf: list[str] = []
+    pending_demo: str | None = None
 
     def flush() -> None:
         text = "\n".join(buf).strip("\n")
@@ -204,14 +241,22 @@ def build_cells(md: str) -> list[dict]:
             i += 1
             continue
 
-        if (line.startswith("## ") or line.startswith("### ")) and any(
-            b.strip() for b in buf
-        ):
-            flush()
+        if line.startswith("## ") or line.startswith("### "):
+            if any(b.strip() for b in buf):
+                flush()
+            # The just-finished section ended here — emit its demo (if any)
+            # after its prose, before the new heading starts accumulating.
+            if pending_demo is not None:
+                cells.append(code_cell(pending_demo))
+                pending_demo = None
+            if line in LINKED_CODE_DEMOS:
+                pending_demo = LINKED_CODE_DEMOS[line]
         buf.append(line)
         i += 1
 
     flush()
+    if pending_demo is not None:  # demo on the final section
+        cells.append(code_cell(pending_demo))
     return cells
 
 
