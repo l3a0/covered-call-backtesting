@@ -45,6 +45,10 @@ FIGURE_CALLS: dict[str, str] = {
 
 IMAGE_RE = re.compile(r"^!\[.*\]\((?:\./)?docs/figures/([0-9A-Za-z_]+\.png)\)\s*$")
 
+# H2–H4 starts a new markdown cell (and bounds a LINKED_CODE_DEMOS section).
+# Not H1 (the single doc title) and not H5+ (none exist).
+HEADING_RE = re.compile(r"#{2,4} ")
+
 # Some tutorial sections *link* to code in cc_backtest.py instead of inlining
 # it (the repo's "linked, test-pinned implementations" convention), so the
 # converter sees no fenced block to turn into a runnable cell. For those, map
@@ -127,6 +131,57 @@ tiny = 0.005
 print(
     f"${tiny} gross -> {tiny * (1 - SLIPPAGE) - COMMISSION_PER_SHARE:+.4f} net/share"
     f"  -> run_cc_overlay refuses to open (net_premium <= 0)"
+)''',
+    "### How to Stitch Out-of-Sample Results into a Single Equity Curve": '''\
+# Run the real walk-forward optimizer with the 3x3x3 grid the next section
+# discusses (pinned by test_walk_forward_optimization on this MSFT data).
+import collections
+
+grid = {
+    "call_delta": [0.15, 0.20, 0.25],
+    "dte": [21, 30, 45],
+    "close_at_pct": [0.50, 0.75, 1.00],
+}
+oos_equity, periods = walk_forward_optimization(dates, prices, grid)
+
+print(
+    f"{len(periods)} out-of-sample periods: "
+    f"{periods[0]['test_start']} -> {periods[-1]['test_end']}"
+)
+for key in ("call_delta", "dte", "close_at_pct"):
+    tally = collections.Counter(p["best_params"][key] for p in periods)
+    spread = "  ".join(f"{v}x{n}" for v, n in sorted(tally.items()))
+    print(f"  {key:<12} -> {tally.most_common(1)[0][0]!s:<5} ({spread})")
+
+# Cumulative OOS return = chain each period's 6-month return. The stitched
+# curve resets per period, so dividing last by first would be meaningless.
+cumulative = 1.0
+for p in periods:
+    seg = oos_equity.loc[
+        (oos_equity["date"] >= p["test_start"])
+        & (oos_equity["date"] < p["test_end"]),
+        "equity",
+    ]
+    cumulative *= 1.0 + (seg.iloc[-1] - seg.iloc[0]) / seg.iloc[0]
+print(f"\\nChained OOS compound return: {cumulative - 1.0:+.0%}")''',
+    "#### The Code": '''\
+# compute_statistics already ran in the data-prep cell — these are its real
+# outputs (exactly what the next section, "What MSFT Actually Says", quotes):
+import math
+
+print(f"Annualized Excess Return:  {stats['ann_excess_return_pct']:+7.3f}%")
+print(f"Annualized Excess Vol:     {stats['ann_excess_vol_pct']:7.2f}%")
+print(f"Sharpe of Excess Return:   {stats['sharpe_excess']:+7.3f}")
+print(f"t-stat (naive, IID):       {stats['t_stat_naive']:+7.2f}")
+print(f"t-stat (Newey-West, L={stats['nw_lag']}): {stats['t_stat_newey_west']:+7.2f}")
+print(f"Clears t=2 bar?            {stats['passes_t_2']}")
+print(f"Clears t=3 bar (HLZ)?      {stats['passes_t_3']}")
+
+# Cross-check the t ~ Sharpe x sqrt(years) shortcut the tutorial derives:
+yrs, sh = stats["years_of_data"], stats["sharpe_excess"]
+print(
+    f"\\nShortcut: Sharpe x sqrt(years) = {sh:.3f} x sqrt({yrs}) "
+    f"= {sh * math.sqrt(yrs):.2f}  (vs naive t {stats['t_stat_naive']:+.2f})"
 )''',
 }
 
@@ -293,7 +348,7 @@ def build_cells(md: str) -> list[dict]:
             i += 1
             continue
 
-        if line.startswith("## ") or line.startswith("### "):
+        if HEADING_RE.match(line):
             if any(b.strip() for b in buf):
                 flush()
             # The just-finished section ended here — emit its demo (if any)
