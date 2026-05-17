@@ -82,8 +82,6 @@ That isn't a backtest bug. It's the single-stock weakness reasserting itself eve
 
 ## So what
 
-Here is the operating procedure to take from all of this.
-
 When someone shows you a strategy's returns, the return is the least interesting number on the page. Ask two questions instead. First: *what's the t-statistic on the excess return over the benchmark I'd actually hold otherwise?* — not over cash, not over zero, over the realistic alternative. Second: *was it computed with a correction for autocorrelation?*
 
 Most marketing decks can answer neither. They report a profit, in large type, over a single favorable history, against no benchmark or a flattering one, with no measure of uncertainty at all. Now you know that's not an oversight. It's the whole pitch — because the honest numbers are usually the embarrassing ones, and the people selling know it.

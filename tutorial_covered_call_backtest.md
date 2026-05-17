@@ -163,7 +163,7 @@ Think of it this way:
 
 ### Why We Need It: No Historical Option Data
 
-Here's the hard truth: **We don't have historical option prices.**
+**We don't have historical option prices.**
 
 If I want to test, "Would I have profited selling SPY calls on January 15, 2015?", I can't just look up what SPY calls cost that day—at least not easily or reliably. The data is expensive or incomplete.
 
@@ -329,8 +329,6 @@ Premium: $0.89 per share ($89 per contract)
 Note: The delta won't be exactly 0.25 after rounding to a whole dollar — that's normal. Real strikes come in fixed increments, so you pick the closest one to your target delta.
 
 ### Common Mistake: Confusing Historical Volatility with Implied Volatility
-
-Here's where most people get confused.
 
 **Historical volatility (HV)** = How much the stock bounced around in the past
 
@@ -936,7 +934,7 @@ The clean way to do that is **excess returns**: each day's overlay return minus 
 
 #### The IID Trap
 
-Here's where most DIY backtesters get fooled. The standard t-stat formula is:
+The standard t-stat formula is:
 
 ```text
 t = mean / (std_dev / sqrt(n))
@@ -1225,7 +1223,7 @@ Here's the complete process:
 
 **Good signs:**
 
-- Walk-forward test shows 60–70% of in-sample returns (realistic)
+- Walk-forward efficiency (out-of-sample ÷ in-sample) stays healthy — roughly two-thirds is the common practitioner rule of thumb (Pardo 2008), not a small fraction. Treat the band as lore, not a law
 - Monte Carlo: real return percentile > 80% (beats randomized price paths)
 - Sensitivity: nearby parameters give similar results (not overfit)
 - Works in all regimes (not just bull markets)
@@ -1463,6 +1461,10 @@ Academic papers cited or built on in this tutorial. URLs link to the publishers'
 ### Numerical methods
 
 - Abramowitz, M. & Stegun, I. A. (eds.) (1964). *Handbook of Mathematical Functions with Formulas, Graphs, and Mathematical Tables*. National Bureau of Standards. Source of the polynomial CDF approximation (Formula 26.2.17) used in the educational version of `normal_cdf`. ([Wikipedia](https://en.wikipedia.org/wiki/Abramowitz_and_Stegun))
+
+### Backtesting methodology
+
+- Pardo, R. (2008). *The Evaluation and Optimization of Trading Strategies* (2nd ed.). John Wiley & Sons. Source of walk-forward analysis and the *walk-forward efficiency* (out-of-sample ÷ in-sample) heuristic; the "roughly two-thirds" band is practitioner lore, not a precise threshold from the book. ([Wiley](https://www.wiley.com/en-us/The+Evaluation+and+Optimization+of+Trading+Strategies%2C+2nd+Edition-p-9781118045053))
 
 ### Volatility risk premium
 
