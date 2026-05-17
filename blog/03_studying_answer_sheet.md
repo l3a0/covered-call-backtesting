@@ -1,6 +1,6 @@
-# Studying for the Test by Reading the Answer Sheet
+# The Cheapest Way to Fool Yourself in Quant Investing
 
-*How to tell the difference between a strategy that works and one you tuned until it looked like it did.*
+*Four independent attacks every backtest should survive before you believe it.*
 
 If you study for an exam by reading the exact questions that will be on it, you'll get a perfect score. You'll also have learned nothing about whether you understand the subject. The grade is real and completely uninformative at the same time.
 
