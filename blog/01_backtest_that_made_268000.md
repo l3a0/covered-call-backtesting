@@ -36,7 +36,7 @@ The third, and the one that ruins the most strategies, is **overfitting**. There
 
 Those three corrupt the backtest itself. There's a fourth, different in kind: it corrupts the statistic you'd use to catch the other three. That one is where the series ends — set it aside for now.
 
-I built this backtest specifically to avoid the first two. The third is where the story turns.
+I engineered the first one out — every decision uses only past data. The second I don't avoid so much as sidestep: this is one survivor, Microsoft, but survivorship can't bias what I'm actually measuring — the overlay's excess *over the same stock*, where picking a winner inflates both sides and cancels out. Single-stock is still a real limitation, and the finale takes it head-on. The third is where the story turns.
 
 ## The number that didn't fit
 
@@ -60,7 +60,7 @@ A profit and an edge are not the same claim. A profit is "this made money in thi
 
 The skill that separates someone who can evaluate a strategy from someone who just gets sold one is the reflex to ask the second question — and to ask it hardest about your own ideas, when the answer you want is right there and the math is the only thing standing between you and believing it.
 
-I didn't lose money on this. I never traded it. What the exercise produced instead was the more valuable thing: a clear, defensible reason to *not* believe an attractive number I generated myself.
+What the exercise produced instead was the more valuable thing: a clear, defensible reason to *not* believe an attractive number I generated myself.
 
 ## What's still unanswered
 
