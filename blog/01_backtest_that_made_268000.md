@@ -6,6 +6,10 @@ I ran a simulation last month that turned $100,000 into roughly $1.01 million. S
 
 It wasn't. And the most useful thing I did all month was figure out exactly how I knew that.
 
+![Two portfolio-value curves over 2016–2026 on a $100K start. The covered-call overlay line ends near $1.01M, slightly above the buy-and-hold Microsoft line; both rise together for most of the decade, with the overlay pulling modestly ahead.](../docs/figures/01_equity_curves.png)
+
+*The seduction. This is the chart that sells the strategy: ten years, a real stock, and a line that ends a quarter-million dollars above just holding it. Hold this image in your head — the last post shows you the exact same chart and it means the opposite.*
+
 ## What I was testing
 
 The strategy is a **covered call**, and the idea is older and duller than anything you'd see pitched on YouTube. You own shares of a stock. Each month, you sell someone else the right to buy those shares from you at a price above where they trade today. They pay you a small fee — the premium — for that right. If the stock stays put or drifts down, the right expires worthless and you keep the fee. If the stock rockets past the agreed price, you hand over the shares at that price and miss the extra upside.
@@ -41,6 +45,12 @@ My backtest cleared the obvious traps. It made every decision using only past da
 Then I looked at one more line of output — a statistic that asks a different question than "how much did it make?" It asks: *if the overlay added no real value, how often would pure chance hand you a result at least this good over a sample this size?* There's a standard number for that. Above roughly 2, you can argue the result is unlikely to be luck. My backtest came back at **0.46.**
 
 Both of these things are true at the same time. The strategy made real money in the simulation, and the evidence that the overlay itself — as opposed to simply owning a stock that went up 646% — added anything is statistically indistinguishable from noise. Microsoft did the heavy lifting. The $268,000 sitting on top of it is the part under suspicion, and the suspicion holds.
+
+It helps to see where that $268,000 even comes from. The strategy collected nearly a million dollars in option premium over the decade — but almost three-quarters of it went right back out the door buying calls back and capping upside on the trades that got assigned.
+
+![A waterfall chart with three bars. The first, gross premium collected, stands at about $999K. The second drops by roughly $730K for buybacks and assignment costs. The third, net overlay P&L, lands at about $268K — only about 27% of the gross.](../docs/figures/12_premium_waterfall.png)
+
+*The income number that gets quoted in pitches is the first bar. The number you actually keep is the third. The gap between them is the part nobody puts on the slide.*
 
 ## Why this is the whole game
 

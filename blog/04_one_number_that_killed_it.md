@@ -8,6 +8,10 @@ The covered-call overlay added **$268,000** on top of buy-and-hold Microsoft ove
 
 And the evidence that the overlay itself added anything — as opposed to riding a stock that happened to go up 646% — is **statistically indistinguishable from zero.**
 
+![Two portfolio-value curves over 2016–2026 on a $100K start. The covered-call overlay line ends near $1.01M, slightly above the buy-and-hold Microsoft line; both rise together for most of the decade, with the overlay pulling modestly ahead.](../docs/figures/01_equity_curves.png)
+
+*The reveal. This is the exact chart from the first post — same axes, same numbers, same quarter-million-dollar gap. Nothing about the picture changed. Everything about what it means is about to.*
+
 Both of those are true. This post is about the one number that reconciles them, why the textbook way of computing it quietly lies for strategies like this one, and what's left standing once you compute it honestly.
 
 ## A profit and an edge are different claims
@@ -36,9 +40,17 @@ The fix is a standard-error correction called **Newey-West**. The plain-language
 
 It's a well-worn tool. Andrews (1991) and Newey & West (1994) set the framework; it's standard equipment in any serious empirical-finance paper. The engine picks the lag window by their formula and reports both numbers side by side, so you can see what the correction did.
 
+![Three curves against the lag-window setting L: a bias-squared term that falls as L grows, a variance term that rises as L grows, and their sum forming a U-shaped total-error curve with a clear minimum. A vertical line marks the value the standard formula picks, sitting near the bottom of the U.](../docs/figures/03_bias_variance.png)
+
+*The correction has one knob — how many days of dependence to look back over. Too few and you miss the dependence; too many and the estimate gets noisy. There's a sweet spot, and the standard formula lands near it without you having to tune anything. That's why "use Newey-West" is a recipe, not a judgment call.*
+
 Here's what it did, and I want to be precise because the honest version is more interesting than the tidy one. The naive t-stat on the overlay's excess return is **0.40**. The Newey-West-corrected t-stat is **0.46**. The correction barely moved it — and it nudged it slightly *up*, not down.
 
 That deserves an explanation, not a glossover. The textbook danger is positive autocorrelation inflating a naive t-stat toward a fake "significant." This strategy's excess returns happen to carry mild *negative* net autocorrelation instead — the short call's daily mark-to-market partly reverses itself day to day — so here the correction's effect is tiny and runs the other way. The lesson is not "Newey-West rescued me from a fake 2.0." On this sample it didn't have to. The lesson is that **you only know that because you computed it.** The correction is the instrument that tells you which case you're in. Skip it and you're trusting a number that, on a different strategy, would have lied to you confidently.
+
+![A bar chart of the autocorrelation of daily excess profit at lags 1 through 20. Most bars sit just below zero; the bars inside the Newey-West window of the first eight lags are predominantly negative, and almost all bars fall within a shaded 95% white-noise band.](../docs/figures/11_excess_acf.png)
+
+*What the textbook formula assumes is all-zero. Holding one option for weeks makes these bars non-zero — but here they lean slightly negative, not positive, especially across the eight-day window the correction actually uses. That negative lean is the whole reason 0.40 became 0.46 instead of something smaller.*
 
 Either way the verdict is identical and unambiguous: 0.46, against a bar of 2, and a stricter bar of 3 once you account for having tested twenty-seven parameter combinations to find this one. The edge is indistinguishable from zero, before the correction and after it.
 
@@ -50,6 +62,10 @@ On an *absolute* basis, the overlay is genuinely good. Its risk-adjusted return 
 
 The t-stat isn't measuring that. It's measuring something stricter and more honest: the overlay's excess return *over holding the same stock*. And on this one stock, over this one decade, that excess is noise. Microsoft did the heavy lifting. The premium income is real, but it's roughly offset by the upside you forfeited every time the stock got called away, and what's left over is statistically a wash.
 
+![A histogram of daily excess returns, overlay minus buy-and-hold, in basis points. The distribution is a tall symmetric pile centered almost exactly on zero, with a sample mean fractionally positive and the Newey-West t-stat of 0.46 annotated.](../docs/figures/02_excess_histogram.png)
+
+*This is the $268,000, viewed as the thing the t-stat actually sees: a daily excess pile sitting on zero. The mean is positive by a hair — that hair, compounded over a decade, is the quarter-million dollars. A hair this far inside the noise is not an edge.*
+
 This is not a surprising result, and that's the point. It's almost exactly what the academic literature on the volatility risk premium predicts: the effect is real and harvestable at the *index* level, where it's been measured over many decades, and it's far weaker and noisier on any *single* name, where one stock's idiosyncratic path swamps the premium. A single-stock covered call on a ten-year sample is the setup most likely to show a strong dollar number and a t-stat that can't clear the bar. That's the established finding. This backtest's 0.46 is one specific, well-behaved instance of it.
 
 ## The cleanest version still doesn't clear the bar
@@ -59,6 +75,10 @@ There's a sharper way to make the point. The overlay's excess return mixes two d
 You can hedge it away. Dynamically rebalance the share position so the portfolio's net exposure stays pinned to plain buy-and-hold, and the same calls and the same premium now isolate the premium cleanly. Do that and the Sharpe of the excess return rises to about **0.46** and the Newey-West t-stat to about **1.63** — a 3.5× improvement on the unhedged version. And it is *still* short of the t = 2 bar.
 
 That isn't a backtest bug. It's the single-stock weakness reasserting itself even after you've stripped out every source of noise you can name. The honest path to a confident answer was never a longer single-stock backtest — at this effect size that would take roughly 250 years of data. It's the same framework run on a broad index over decades, which is exactly what the academic literature does.
+
+![A curve of expected t-statistic against years of data on a logarithmic axis, at this strategy's Sharpe ratio. It rises slowly, crossing the conventional significance line of 2 at around 250 years and the stricter line of 3 at around 570. A dot at ten years sits far below both, near 0.4.](../docs/figures/04_t_stat_vs_years.png)
+
+*Why "just run a longer backtest" doesn't save this. At this strategy's effect size, the expected t-stat crawls upward with the square root of time — the dot is where ten years of Microsoft puts you, and the conventional bar is two and a half centuries away. The fix is a bigger edge, not more years.*
 
 ## So what
 
