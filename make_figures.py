@@ -494,7 +494,7 @@ def fig6_delta_dial(prices: NDArray[np.float64]) -> Figure:
                edgecolors="white", linewidths=1.5)
     ax.annotate(
         f"Backtest setting: 0.25 delta\n"
-        f"strike ≈ ${k25:,.0f}  ({otm25:.1f}% OTM)\n"
+        f"strike ≈ \\${k25:,.0f}  ({otm25:.1f}% above the \\${S:,.0f} stock)\n"
         f"≈ 1-in-4 chance of assignment",
         xy=(otm25, 0.25),
         xytext=(otm25 + 3.5, 0.42),
@@ -507,7 +507,9 @@ def fig6_delta_dial(prices: NDArray[np.float64]) -> Figure:
     ax.set_xlabel("How far out-of-the-money the strike is set (%)", fontsize=12)
     ax.set_ylabel("Call delta  ≈  P(shares called away)", fontsize=12)
     ax.set_title(
-        f"Delta is a probability dial  (MSFT  S=${S:,.0f},  σ≈{sigma * 100:.0f}%,  21 DTE)",
+        f"Delta is a probability dial  "
+        f"(MSFT stock ≈ ${S:,.0f},  assumed volatility ≈ {sigma * 100:.0f}%,  "
+        f"21 days to expiry)",
         fontsize=14,
         pad=15,
     )

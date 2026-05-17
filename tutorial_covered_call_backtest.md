@@ -257,7 +257,7 @@ Delta (Δ) is one of the most misunderstood Greek letters in finance.
 
 For income strategies, we typically sell 0.20Δ to 0.40Δ strikes (low probability of assignment).
 
-![Black-Scholes call delta plotted against how far out-of-the-money the strike is set, for MSFT at the first sample price (S≈$48), σ≈28%, 21 DTE. The curve falls monotonically from ≈0.54 at-the-money toward zero by ~20% OTM. A shaded horizontal band marks the 0.20–0.40 income-seller zone; a red dot marks the 0.25Δ strike, which lands ≈7% OTM.](docs/figures/06_delta_dial.png)
+![Black-Scholes call delta plotted against how far out-of-the-money the strike is set, for MSFT with the stock at the first sample price (≈$48), assumed volatility ≈28%, 21 days to expiry. The curve falls monotonically from ≈0.54 at-the-money toward zero by ~20% out-of-the-money. A shaded horizontal band marks the 0.20–0.40 income-seller zone; a red dot marks the 0.25-delta strike, which lands ≈7% above the $48 stock (≈$51).](docs/figures/06_delta_dial.png)
 
 *The dial as a curve. Delta is monotone-decreasing in strike, so "pick a target delta" and "pick a strike distance" are the same decision viewed from two ends. The 0.20–0.40 band is wide in delta but narrow in strike distance — a few percent of moneyness covers the whole income-seller range, which is why small volatility errors move the effective delta more than you'd expect.*
 
