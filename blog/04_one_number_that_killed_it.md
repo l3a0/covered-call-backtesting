@@ -72,7 +72,7 @@ This is not a surprising result, and that's the point. It's almost exactly what 
 
 There's a sharper way to make the point. The overlay's excess return mixes two different things: the volatility premium you're actually trying to harvest, and an equity-timing "wiggle" that comes from the call's delta drifting as the stock moves. That wiggle has zero expected value but a lot of variance — noise you never signed up for, layered on top of the signal you did.
 
-You can hedge it away. Dynamically rebalance the share position so the portfolio's net exposure stays pinned to plain buy-and-hold, and the same calls and the same premium now isolate the premium cleanly. Do that and the Sharpe of the excess return rises to about **0.46** and the Newey-West t-stat to about **1.63** — a 3.5× improvement on the unhedged version. And it is *still* short of the t = 2 bar.
+You can hedge it away. Dynamically rebalance the share position so the portfolio's net exposure stays pinned to plain buy-and-hold, and the same calls and the same premium now isolate the premium cleanly. Do that and the Sharpe of the excess return roughly triples — from about **0.13** to **0.46** — and the Newey-West t-stat climbs from the **0.46** we've been living with to about **1.63**, a 3.5× improvement on the unhedged version. And it is *still* short of the t = 2 bar.
 
 That isn't a backtest bug. It's the single-stock weakness reasserting itself even after you've stripped out every source of noise you can name. The honest path to a confident answer was never a longer single-stock backtest — at this effect size that would take roughly 250 years of data. It's the same framework run on a broad index over decades, which is exactly what the academic literature does.
 
