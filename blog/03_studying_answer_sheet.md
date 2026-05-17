@@ -16,7 +16,7 @@ It dies because you didn't discover a strategy. You discovered the settings that
 
 ## Studying for a different test
 
-The fix is almost insultingly simple to state: never evaluate a strategy on data you used to choose its settings.
+The fix is almost insultingly simple to state: **never evaluate a strategy on data you used to choose its settings.**
 
 The disciplined version is called **walk-forward validation**, and it works like a rolling exam. Take the first two years of history as a training window. Search every parameter combination on *those two years only*, pick the best one, then lock it — no more tuning allowed. Now run that locked strategy on the next six months, which the search never saw. Record the result. Roll the whole apparatus forward six months and repeat: retrain, lock, test on fresh data, record. On the Microsoft history this produces fifteen of these train-then-test cycles.
 
