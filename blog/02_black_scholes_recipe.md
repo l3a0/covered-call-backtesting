@@ -2,7 +2,7 @@
 
 *Four of the five inputs to an option's price are facts you can look up. The fifth is a guess — and that's where almost every options backtest quietly cheats.*
 
-Suppose I asked you to price one year of car insurance for a 25-year-old. You don't need an actuarial license to know what you'd want: how likely is a crash, how much does the car cost to replace, how long is the policy, what can you earn on the premium while you hold it, and how wild a driver are we talking about. Five questions. Answer them honestly and you can name a fair price.
+Suppose I asked you to price one year of car insurance for a 25-year-old. You don't need an actuarial license to know what you'd want: how much the car costs to replace (the stock price), what the coverage limit is (the strike), how long the policy runs (the time to expiration), what you can earn on the premium while you hold it (the risk-free rate), and how wild a driver we're talking about (the volatility). Five questions. Answer them honestly and you can name a fair price.
 
 That is the entire idea behind the most famous equation in finance.
 
