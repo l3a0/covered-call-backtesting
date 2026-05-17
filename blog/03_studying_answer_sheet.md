@@ -12,7 +12,7 @@ A covered-call strategy has a few knobs: how far out-of-the-money to sell, how l
 
 Now run all of them on 2016–2020 and keep the best one. You will find a combination that returned something absurd — call it 1,000%. Publish that number and you have a sensation. Trade it in 2021 and it dies.
 
-It dies because you didn't discover a strategy. You discovered the settings that best fit the *noise* in one specific stretch of history — which storms hit which weeks, which dips happened to reverse. That pattern was real in 2016–2020 and carries no information about 2021, the same way memorizing last year's exam tells you nothing about this year's. The more knobs you turn and the more combinations you try, the more confidently you fit noise and the more spectacular — and more fictional — the headline number gets.
+It dies because you didn't discover a strategy. You discovered the settings that best fit the *noise* in one specific stretch of history — which storms hit which weeks, which dips happened to reverse. That pattern was real in 2016–2020 and carries no information about 2021, the same way memorizing last year's exam *answers* tells you nothing about this year's *questions*. The more knobs you turn and the more combinations you try, the more confidently you fit noise and the more spectacular — and more fictional — the headline number gets.
 
 ## Studying for a different test
 
