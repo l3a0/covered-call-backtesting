@@ -922,6 +922,20 @@ Two thresholds to remember:
 - **|t| > 2** — Fisher's traditional bar. ~5% chance of occurring under the null. The textbook line for "statistically significant."
 - **|t| > 3** — [Harvey, Liu & Zhu's stricter bar from their 2016 paper](https://academic.oup.com/rfs/article-abstract/29/1/5/1843824). They argue that because finance has tested hundreds of factors, many "significant" |t| ≈ 2 results are just the lucky ones from a wide search. Three is the honest bar once you account for multiple testing.
 
+Those thresholds are easier to feel as **p-values** — the probability that pure chance, under H₀, produces a t at least this extreme. At n ≈ 2,500 daily observations the reference distribution is effectively standard normal (what Newey–West and Harvey–Liu–Zhu both assume asymptotically), so the mapping is just the normal tail:
+
+| t-stat | Two-sided p | One-sided p | ≈ false-positive odds (two-sided) |
+| ---: | ---: | ---: | --- |
+| 1.96 (exact 5%) | 0.050 | 0.025 | 1 in 20 |
+| **2.0** — conventional bar | **0.046** | 0.023 | ~1 in 22 |
+| 2.576 (exact 1%) | 0.010 | 0.005 | 1 in 100 |
+| **3.0** — Harvey–Liu–Zhu bar | **0.0027** | 0.0013 | ~1 in 370 |
+| naive **0.40** (this backtest) | 0.69 | 0.34 | ~1 in 1.4 |
+| Newey–West **0.46** (this backtest) | 0.65 | 0.32 | ~1 in 1.5 |
+| risk-managed **1.63** | 0.10 | 0.052 | ~1 in 10 |
+
+`compute_statistics` tests `|t|`, so the two-sided column is the one the pass/fail flags use; the one-sided column applies if you only care about a *positive* edge. Two caveats keep these honest: (1) the single-test p **understates** the true false-positive rate after a parameter search — search 27 combos, report the luckiest, and your real error rate is far worse than its nominal p; that gap is precisely why HLZ push the bar to t = 3 (p ≈ 0.0027), and why you should never read the t = 2 column as your error rate when you optimized. (2) The p inherits the Newey–West SE and the normal-tail approximation; with fat tails or residual autocorrelation it is itself an estimate — argue from the t-magnitude and the HLZ bar, not a bright-line p = 0.05. On this backtest the Newey–West 0.46 is a p ≈ 0.65: chance beats the overlay's excess about two times in three. That is the quantitative content of "indistinguishable from zero."
+
 #### What We're Actually Testing
 
 For a covered call overlay, the relevant null hypothesis is:

@@ -42,7 +42,7 @@ I engineered the first one out — every decision uses only past data. The secon
 
 My backtest cleared the obvious traps. It made every decision using only past data. And it still reported that $268,000 of added profit, with an 81% win rate, over a full decade.
 
-Then I looked at one more line of output — a statistic that asks a different question than "how much did it make?" It asks: *if the overlay added no real value, how often would pure chance hand you a result at least this good over a sample this size?* There's a standard number for that. Above roughly 2, you can argue the result is unlikely to be luck. My backtest came back at **0.46.**
+Then I looked at one more line of output — a statistic that asks a different question than "how much did it make?" It asks: *if the overlay added no real value, how often would pure chance hand you a result at least this good over a sample this size?* There's a standard number for that. Above roughly 2, you can argue the result is unlikely to be luck. My backtest came back at **0.46.** In plain odds: if the overlay added nothing, pure chance would still have handed me a result this good or better about two times in three.
 
 Both of these things are true at the same time. The strategy made real money in the simulation, and the evidence that the overlay itself — as opposed to simply owning a stock that went up 646% — added anything is statistically indistinguishable from noise. Microsoft did the heavy lifting. The $268,000 sitting on top of it is the part under suspicion, and the suspicion holds.
 

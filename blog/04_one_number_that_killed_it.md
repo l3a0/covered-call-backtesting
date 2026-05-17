@@ -52,7 +52,7 @@ That deserves an explanation, not a glossover. The textbook danger is positive a
 
 *What the textbook formula assumes is all-zero. Holding one option for weeks makes these bars non-zero — but here they lean slightly negative, not positive, especially across the eight-day window the correction actually uses. That negative lean is the whole reason 0.40 became 0.46 instead of something smaller.*
 
-Either way the verdict is identical and unambiguous: 0.46, against a bar of 2, and a stricter bar of 3 once you account for having tested twenty-seven parameter combinations to find this one. The edge is indistinguishable from zero, before the correction and after it.
+Either way the verdict is identical and unambiguous: 0.46, against a bar of 2, and a stricter bar of 3 once you account for having tested twenty-seven parameter combinations to find this one. It helps to put these in the currency statisticians actually use — a *p-value*, the probability pure chance hands you a result at least this good. The bar of 2 is roughly a 1-in-20 event; the multiple-testing bar of 3 is about 1 in 370. This backtest's 0.46 is a p-value near 0.65 — chance alone would match or beat it about two times in three. The edge is indistinguishable from zero, before the correction and after it.
 
 ## The honest verdict
 
