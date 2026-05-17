@@ -30,6 +30,8 @@ The second is **survivorship bias** — testing only the names that lived. Backt
 
 The third, and the one that ruins the most strategies, is **overfitting**. There are several knobs on a covered-call strategy: how far out of the money to sell, how long until the option expires, when to close early. Turn them long enough and you will find a combination that produced enormous returns from 2016 to 2020 — and produces nothing from 2021 on, because you didn't tune a strategy, you memorized the noise in one stretch of history.
 
+Those three corrupt the backtest itself. There's a fourth, different in kind: it corrupts the statistic you'd use to catch the other three. That one is where the series ends — set it aside for now.
+
 I built this backtest specifically to avoid the first two. The third is where the story turns.
 
 ## The number that didn't fit
@@ -52,9 +54,9 @@ I didn't lose money on this. I never traded it. What the exercise produced inste
 
 ## What's still unanswered
 
-There's a loose end. A 0.46 isn't random — it's roughly what the academic literature predicts when you run this strategy on a single stock rather than a broad index, and the reason why is genuinely interesting. There's also a wrinkle in how that statistic gets computed: the naive way of calculating it is itself a fourth way to lie to yourself, and it inflates the number badly for exactly this kind of strategy.
+There's a loose end. A 0.46 isn't random — it's roughly what the academic literature predicts when you run this strategy on a single stock rather than a broad index, and the reason why is genuinely interesting. There's also the fourth trap I flagged earlier, and it's different in kind from the first three: those corrupt the backtest, while this one corrupts the statistic you use to judge it. The textbook formula for that statistic quietly assumes something untrue for a strategy held for weeks at a time, and most amateur backtests never correct for it.
 
-Those are the next two posts. The one after that is about how you'd stress-test a strategy that *did* clear the bar. For now, the takeaway is small and load-bearing: when a backtest hands you a beautiful number, the interesting work hasn't started yet.
+The pricing engine comes next — where those option prices came from, and why that's exactly where optimism sneaks in. After that, how you stress-test a strategy against overfitting. The series ends back here: why 0.46 is what the single-stock literature predicts, and that fourth trap in how the number is computed. For now, the takeaway is small and load-bearing: when a backtest hands you a beautiful number, the interesting work hasn't started yet.
 
 ---
 

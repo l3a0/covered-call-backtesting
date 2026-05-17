@@ -54,7 +54,7 @@ Most strategies you'll be pitched report the first kind and quietly skip all fou
 
 So the covered-call overlay clears every bar in this post. It doesn't collapse out-of-sample, it beats five hundred scrambled histories, it shrugs off parameter nudges, it works in every regime. By the standards most backtests are held to, it's bulletproof.
 
-It still fails one test — the single statistic from the first post, the one that came back at 0.46. Walk-forward and robustness checks ask "is this strategy stable and general?" They never ask "is its edge distinguishable from zero?" Those are different questions, and the second one has a brutal answer here. That's the next, and final, post — including why the naive way of computing that statistic is itself a fifth way to lie to yourself.
+It still fails one test — the single statistic from the first post, the one that came back at 0.46. Walk-forward and robustness checks ask "is this strategy stable and general?" They never ask "is its edge distinguishable from zero?" Those are different questions, and the second one has a brutal answer here. That's the next, and final, post — including why the naive way of computing that statistic is itself a fourth way to lie to yourself.
 
 ---
 
