@@ -139,16 +139,13 @@ print(
     f"  -> run_cc_overlay refuses to open (net_premium <= 0)"
 )''',
     "### How to Stitch Out-of-Sample Results into a Single Equity Curve": '''\
-# Run the real walk-forward optimizer with the 3x3x3 grid the next section
-# discusses (pinned by test_walk_forward_optimization on this MSFT data).
+# The walk-forward search already ran once in the setup cell (it binds
+# `records` + `oos_equity` from the 3x3x3 grid pinned by
+# test_walk_forward_optimization). Reuse those — re-running here would
+# repeat the 405-backtest search just to reprint the same results.
 import collections
 
-grid = {
-    "call_delta": [0.15, 0.20, 0.25],
-    "dte": [21, 30, 45],
-    "close_at_pct": [0.50, 0.75, 1.00],
-}
-oos_equity, periods = walk_forward_optimization(dates, prices, grid)
+periods = records
 
 print(
     f"{len(periods)} out-of-sample periods: "
@@ -161,6 +158,8 @@ for key in ("call_delta", "dte", "close_at_pct"):
 
 # Cumulative OOS return = chain each period's 6-month return. The stitched
 # curve resets per period, so dividing last by first would be meaningless.
+# This is the same chaining test_walk_forward_optimization asserts; it's
+# shown once, here, because this is the section that explains stitching.
 cumulative = 1.0
 for p in periods:
     seg = oos_equity.loc[
@@ -225,12 +224,10 @@ print("   ...")
 for c in combos[-2:]:
     print("  ", c)''',
     "### Monte Carlo Simulation: Shuffle Daily Returns, Rebuild Price Paths": '''\
-# Reuse the real cc_backtest.monte_carlo_shuffle — the exact function
-# test_monte_carlo_shuffle pins, so the notebook can't drift from it.
-# ~12s, the heaviest cell (500 backtests).
-from cc_backtest import monte_carlo_shuffle
-
-mc = monte_carlo_shuffle(dates, prices, params)  # defaults: 500 paths, seed=42
+# `mc` already came from cc_backtest.monte_carlo_shuffle in the setup
+# cell (500 paths, seed=42 — the exact call test_monte_carlo_shuffle
+# pins). Reuse it; rerunning the 500-backtest shuffle here would just
+# reproduce the same dict the heavy setup cell already holds.
 print(
     f"real {mc['real_return']:.0f}%  vs  MC mean {mc['mc_mean']:.0f}%"
     f"  (max {mc['mc_max']:.0f}%)  ->  percentile {mc['percentile']}"
@@ -371,7 +368,7 @@ param_grid = {
     "dte": [21, 30, 45],
     "close_at_pct": [0.50, 0.75, 1.00],
 }
-_oos_equity, records = walk_forward_optimization(dates, prices, param_grid)
+oos_equity, records = walk_forward_optimization(dates, prices, param_grid)
 mc = monte_carlo_shuffle(dates, prices, params, n_shuffles=500, seed=42)
 regimes = regime_analysis(dates, prices, trades)
 

@@ -784,43 +784,6 @@ This also clarifies the right reading of the headline 915% number reported elsew
 
 The same span trap applies to the buy-and-hold baseline. The README's ~646% buy-and-hold is the full 10-year sample; over the walk-forward window buy-and-hold returned ~467%. Compared correctly, fixed-params (~563%) beats same-span buy-and-hold by ~96 pp, but the honest walk-forward number (~483%) clears it by only ~16 pp over 7.5 years. That thin no-hindsight margin over simply holding the stock is exactly what the Part 5 significance test puts a number on — and why the Newey-West t-stat on the overlay's *excess* over buy-and-hold lands well below 2.
 
-### Checkpoint: Reproduce These Numbers Yourself
-
-Don't take the 483 / 563 / 467 on faith — the engine is deterministic, so you can regenerate them and confirm your understanding lines up with the code. The walk-forward result is pinned by a regression test, which doubles as a self-grading answer key:
-
-```bash
-pytest "test_cc_backtest.py::TestMsftTenYearRegression::test_walk_forward_optimization" -q
-```
-
-A green pass means your checkout reproduces all three numbers (it asserts 15 OOS periods, ~483% chained walk-forward, 563.04% fixed-params, ~467% same-span buy-and-hold). To *see* the figures rather than just assert them, run the search yourself on the bundled data:
-
-```python
-import pandas as pd
-from cc_backtest import walk_forward_optimization
-
-df = pd.read_csv('msft_10yr_prices.csv', skiprows=3, header=None, names=['date', 'close'])
-dates, prices = df['date'].tolist(), df['close'].to_numpy(dtype=float)
-
-grid = {'call_delta': [0.15, 0.20, 0.25], 'dte': [21, 30, 45], 'close_at_pct': [0.50, 0.75, 1.00]}
-oos_equity, records = walk_forward_optimization(dates, prices, grid)
-
-# Cumulative OOS return = chain each period's 6-month return (the same
-# computation the regression test pins). oos_equity is a date/equity frame.
-cumulative = 1.0
-for r in records:
-    in_period = (oos_equity['date'] >= r['test_start']) & (oos_equity['date'] < r['test_end'])
-    eq = oos_equity.loc[in_period, 'equity']
-    cumulative *= 1.0 + (eq.iloc[-1] - eq.iloc[0]) / eq.iloc[0]
-
-print(f"{len(records)} OOS periods")
-print(f"walk-forward cumulative: ~{(cumulative - 1.0) * 100:.0f}%")
-print("chosen call_delta per period:", [r['best_params']['call_delta'] for r in records])
-```
-
-You should see 15 periods, a walk-forward figure near 483%, and `call_delta` equal to `0.25` in 14 of the 15 entries.
-
-**If your numbers differ:** a *different* count of periods means your `msft_10yr_prices.csv` isn't the bundled 10-year file (re-pull it). A return that's off by more than a few points but the right period count usually means the grid or the engine constants were changed — diff against `main`. An exact-but-different number across the board is expected only if a regression was deliberately re-pinned (check `git log` on the test).
-
 ### Common Mistake: Optimizing on Too Many Parameters (Overfitting the Grid)
 
 If you optimize on 500 parameter combinations, some will look amazing by pure luck.
@@ -1441,7 +1404,7 @@ The full implementation lives in this repository. Each file is the source of tru
 | File | What it contains |
 | --- | --- |
 | [`cc_backtest.py`](https://github.com/l3a0/covered-call-backtesting/blob/main/cc_backtest.py#L201) | Black-Scholes pricing, rolling-volatility helpers, the [`run_cc_overlay`](https://github.com/l3a0/covered-call-backtesting/blob/main/cc_backtest.py#L201) engine, and [`compute_statistics`](https://github.com/l3a0/covered-call-backtesting/blob/main/cc_backtest.py#L599) for Newey-West t-stats |
-| [`test_cc_backtest.py`](https://github.com/l3a0/covered-call-backtesting/blob/main/test_cc_backtest.py#L474) | Pytest suite covering pricing primitives, the overlay state machine, scenario tests, and the statistics helper |
+| [`test_cc_backtest.py`](https://github.com/l3a0/covered-call-backtesting/blob/main/test_cc_backtest.py#L36) | Pytest suite covering pricing primitives, the overlay state machine, scenario tests, and the statistics helper |
 | [`download_prices.py`](https://github.com/l3a0/covered-call-backtesting/blob/main/download_prices.py#L11) | Fetches historical daily closes via yfinance |
 | [`msft_10yr_prices.csv`](https://github.com/l3a0/covered-call-backtesting/blob/main/msft_10yr_prices.csv) | Bundled 10-year MSFT daily-close dataset used in the worked examples |
 | [`requirements.txt`](https://github.com/l3a0/covered-call-backtesting/blob/main/requirements.txt) | Pinned dependencies |
