@@ -759,6 +759,15 @@ All three *per-axis* winners match the `__main__` defaults: `0.25Δ`, `21 DTE`, 
 
 ### The Key Finding: Walk-Forward Tells the Honest Story
 
+**Predict first.** Walk-forward re-tunes the parameters every period using only the data available *before* each test window. The "fixed-params" run instead uses the single best triple for the whole 7.5-year span. Before you read on, commit to an answer: does walk-forward come out **higher or lower** than fixed-params — and which of the two is the number you should actually trust?
+
+<details>
+<summary>Reveal</summary>
+
+**Lower — and the lower number is the honest one.** Walk-forward underperforms fixed-params here by roughly 80 percentage points. That feels like the more rigorous method losing, but it's the reverse: fixed-params only "wins" because it was handed the answer key — the winning triple, chosen with full hindsight over the very data it's then scored on. Walk-forward is the return you'd have actually earned trading in real time. If a single full-period backtest looks great and walk-forward pulls it down, that's the methodology working. The numbers are below.
+
+</details>
+
 **Result on the bundled MSFT data, over the walk-forward span (2018-04 → 2025-10):**
 
 - **Walk-forward** (params optimized per period, 6-month OOS windows chained): **~483%** cumulative compound return.
@@ -775,9 +784,55 @@ This also clarifies the right reading of the headline 915% number reported elsew
 
 The same span trap applies to the buy-and-hold baseline. The README's ~646% buy-and-hold is the full 10-year sample; over the walk-forward window buy-and-hold returned ~467%. Compared correctly, fixed-params (~563%) beats same-span buy-and-hold by ~96 pp, but the honest walk-forward number (~483%) clears it by only ~16 pp over 7.5 years. That thin no-hindsight margin over simply holding the stock is exactly what the Part 5 significance test puts a number on — and why the Newey-West t-stat on the overlay's *excess* over buy-and-hold lands well below 2.
 
+### Checkpoint: Reproduce These Numbers Yourself
+
+Don't take the 483 / 563 / 467 on faith — the engine is deterministic, so you can regenerate them and confirm your understanding lines up with the code. The walk-forward result is pinned by a regression test, which doubles as a self-grading answer key:
+
+```bash
+pytest "test_cc_backtest.py::TestMsftTenYearRegression::test_walk_forward_optimization" -q
+```
+
+A green pass means your checkout reproduces all three numbers (it asserts 15 OOS periods, ~483% chained walk-forward, 563.04% fixed-params, ~467% same-span buy-and-hold). To *see* the figures rather than just assert them, run the search yourself on the bundled data:
+
+```python
+import pandas as pd
+from cc_backtest import walk_forward_optimization
+
+df = pd.read_csv('msft_10yr_prices.csv', skiprows=3, header=None, names=['date', 'close'])
+dates, prices = df['date'].tolist(), df['close'].to_numpy(dtype=float)
+
+grid = {'call_delta': [0.15, 0.20, 0.25], 'dte': [21, 30, 45], 'close_at_pct': [0.50, 0.75, 1.00]}
+oos_equity, records = walk_forward_optimization(dates, prices, grid)
+
+# Cumulative OOS return = chain each period's 6-month return (the same
+# computation the regression test pins). oos_equity is a date/equity frame.
+cumulative = 1.0
+for r in records:
+    in_period = (oos_equity['date'] >= r['test_start']) & (oos_equity['date'] < r['test_end'])
+    eq = oos_equity.loc[in_period, 'equity']
+    cumulative *= 1.0 + (eq.iloc[-1] - eq.iloc[0]) / eq.iloc[0]
+
+print(f"{len(records)} OOS periods")
+print(f"walk-forward cumulative: ~{(cumulative - 1.0) * 100:.0f}%")
+print("chosen call_delta per period:", [r['best_params']['call_delta'] for r in records])
+```
+
+You should see 15 periods, a walk-forward figure near 483%, and `call_delta` equal to `0.25` in 14 of the 15 entries.
+
+**If your numbers differ:** a *different* count of periods means your `msft_10yr_prices.csv` isn't the bundled 10-year file (re-pull it). A return that's off by more than a few points but the right period count usually means the grid or the engine constants were changed — diff against `main`. An exact-but-different number across the board is expected only if a regression was deliberately re-pinned (check `git log` on the test).
+
 ### Common Mistake: Optimizing on Too Many Parameters (Overfitting the Grid)
 
 If you optimize on 500 parameter combinations, some will look amazing by pure luck.
+
+**Predict first.** Two analysts each search a 500-set grid. Analyst A's top three sets return 250%, 120%, 45%. Analyst B's top three return 1,050%, 1,030%, 1,010%. Whose result would you trust to hold up out of sample — the one with the highest peak, or something else? Decide before revealing.
+
+<details>
+<summary>Reveal</summary>
+
+**Trust Analyst B, even though A's headline-vs-nothing gap looks tamer.** What matters is the *shape of the leaderboard*, not the top number. A's results fall off a cliff (250 → 120 → 45): the winner is an isolated spike, almost certainly luck, and the parameter next to it on the grid behaves nothing like it — that's the signature of overfitting. B's top three are clustered tight (1,050 / 1,030 / 1,010): the strategy works across a *neighborhood* of parameters, so the specific winner isn't a fluke. A flat plateau is robust; a lone peak is a trap. (This is the same "convergence to a region, not a point" idea you saw in *What the Optimizer Chose*.)
+
+</details>
 
 **Red flag:**
 
@@ -798,6 +853,23 @@ If you optimize on 500 parameter combinations, some will look amazing by pure lu
 2. Look for stability across parameter values
 3. Test fewer parameters (coarse grid first, then fine-tune)
 4. Use cross-validation (train on A, test on B, train on B, test on A, average)
+
+### Check Your Understanding
+
+Answer these from memory before peeking — if any answer doesn't come, that section is worth a re-read before Part 5 builds on it.
+
+1. The half-open intervals guarantee `test_start == train_end` but never put the boundary date in *both* windows. Why is that one-line detail the load-bearing part of the whole method?
+2. Fixed-params returned ~563% and walk-forward ~483% over the same span. Which number would you quote to someone deciding whether to trade this, and why is the *bigger* one misleading?
+3. `call_delta` locked to 0.25 in 14 of 15 periods, but DTE and close-pct wandered between adjacent grid values. Is that wandering a problem? What would actually be the worrying pattern?
+
+<details>
+<summary>Reveal</summary>
+
+1. It's the no-peeking guarantee made mechanical. If the boundary date leaked into both windows, the parameters scored on a test window would have been chosen partly *from* that window — exactly the in-sample contamination walk-forward exists to prevent. The interval arithmetic is what makes "no peeking" a property of the code rather than a promise.
+2. Quote ~483% (walk-forward). The ~563% fixed-params number assumes you knew the winning triple before seeing any data — it's the return *with* hindsight, which you'll never have live. Walk-forward is the no-hindsight number, i.e. the realistic expectation.
+3. Not a problem — it's the healthy "convergence to a neighborhood" pattern. The worrying signature is the opposite: a single parameter triple winning by a wide margin while its grid neighbors collapse (the cliff-shaped leaderboard from the overfitting Common Mistake). A robust strategy works across a region; a fragile one works at a point.
+
+</details>
 
 ---
 

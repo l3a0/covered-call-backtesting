@@ -1,0 +1,21 @@
+{
+  // Repo-wide markdownlint config.
+  //
+  // MD033 (no-inline-html): the tutorial's predict-then-reveal blocks
+  // use <details>/<summary> collapsibles so the answer stays hidden
+  // until the reader has committed to a prediction — that hide-until-
+  // clicked behavior is the active-recall mechanism, not decoration,
+  // and it renders on both GitHub and the generated notebook. Allow
+  // exactly those two elements; every other inline HTML stays flagged.
+  // MD013 (line-length): every prose file in this repo (tutorial,
+  // README, blog, this config's sibling Markdown) is authored
+  // one-paragraph-per-line — sentences flow unwrapped and the
+  // renderer (GitHub, Substack, the generated notebook) handles
+  // soft-wrapping. An 80-column hard-wrap rule would flag essentially
+  // every paragraph and force a destructive reflow that fights the
+  // authoring convention and bloats the cross-surface diff. Disable
+  // it; readability here is the renderer's job, not the source's.
+  "default": true,
+  "MD033": { "allowed_elements": ["details", "summary"] },
+  "MD013": false
+}
