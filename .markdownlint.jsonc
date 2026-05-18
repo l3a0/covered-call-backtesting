@@ -15,7 +15,13 @@
   // every paragraph and force a destructive reflow that fights the
   // authoring convention and bloats the cross-surface diff. Disable
   // it; readability here is the renderer's job, not the source's.
+  // MD024 (no-duplicate-heading): each Part of the tutorial ends with
+  // an identical "### Check Your Understanding" active-recall block.
+  // They are intentionally the same heading under *different* `## Part`
+  // parents; siblings_only keeps that legal while still catching a real
+  // duplicate (two same-named headings within one section).
   "default": true,
   "MD033": { "allowed_elements": ["details", "summary"] },
-  "MD013": false
+  "MD013": false,
+  "MD024": { "siblings_only": true }
 }
