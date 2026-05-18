@@ -1010,6 +1010,15 @@ The implementations are [`cc_backtest.py::classify_regime`](https://github.com/l
 
 ### Common Mistake: Only Testing in Bull Markets
 
+**Predict first.** You backtest the overlay only on 2016–2021, a strong bull run. It badly trails buy-and-hold over that window. Is that evidence the overlay is a weak strategy?
+
+<details>
+<summary>Reveal</summary>
+
+**No — that's precisely the window where a call-selling overlay is *supposed* to look worst.** A one-way bull is exactly when capped upside hurts most, so testing only there both flatters buy-and-hold and hides the overlay's real job. Look back at the regime table: the per-day edge is roughly 10× larger in bear and sideways markets (~$23/day in bull vs. ~$303 bear / ~$402 sideways). The defect isn't the strategy, it's the *sample* — judging a defensive overlay on bull-only data answers a question you didn't mean to ask.
+
+</details>
+
 If you only backtest on 2016–2021 (a strong bull run), you'll overestimate buy-and-hold returns and underestimate the CC overlay's relative value.
 
 **Solution:** Test on multiple regimes. MSFT data from 2016–2026 includes:
@@ -1303,6 +1312,25 @@ Monte Carlo, sensitivity analysis, and regime testing (above) are the robustness
 **The key insight:** No single check is enough. The more layers that agree your strategy works, the more confident you can be that you've found something real rather than a pattern in noise. Our backtest uses six of these layers (walk-forward, parameter stability, Monte Carlo, regime analysis, sensitivity, and the Newey-West t-stat on excess returns). Adding multi-asset testing and paper trading is the next step before risking real money.
 
 > **Rule of thumb:** If your strategy survives walk-forward + Monte Carlo + parameter stability + at least two different tickers, you have something worth paper trading. If it survives 3–6 months of paper trading, you have something worth deploying with small real capital.
+
+### Check Your Understanding
+
+Answer from memory before revealing — if one doesn't come, that section is worth a reread before Part 6 ties it together.
+
+1. The naive t-stat is `mean / (std / √n)`. Name the two ways an overlay's daily returns violate its IID assumption, and what that violation does to the naive t-stat — so why Newey-West instead of the plain formula?
+2. The Monte Carlo shuffle preserves what about the returns and destroys what? "The overlay beats 100% of shuffles" proves what — and what does it pointedly *not* prove?
+3. The headline dollar P&L looks bull-driven, yet the overlay is called "structurally defensive." Reconcile those.
+4. The backtest shows ~+$268K excess over buy-and-hold but a Newey-West t ≈ 0.46. Contradiction?
+
+<details>
+<summary>Reveal</summary>
+
+1. **Independence fails** — one 21-DTE option drives P&L for up to 21 days, so consecutive overlay returns share a driver (autocorrelation). **Identically-distributed fails** — `detect_regime` itself says returns come from different vol regimes (heteroskedasticity). Both make the naive formula *understate* the standard error, inflating the t-stat by ~30–100%. Newey–West (HAC) corrects for exactly autocorrelation + heteroskedasticity, which is why we report ~0.46, not the inflated ~0.40.
+2. It preserves the daily-return **set** (same mean, vol, distribution) and destroys their **order** (trends, clusters, sequence). Beating the shuffles proves the overlay harvests a *distributional* property (volatility), not a lucky sequence. It does **not** prove the overlay beats buy-and-hold — the shuffle mean (~657%) is itself enormous because that's mostly the *stock*; that's why significance is tested on *excess* returns, not raw return.
+3. Bull days dominate the count (1,690 of 2,515), so they sum to the biggest dollar total — but the per-day edge is ~10× higher in bear/sideways (~$23 vs. ~$303 / ~$402 a day). The *per-day* number, not the dollar total, shows the overlay earns its keep when the market is anything but a one-way bull.
+4. No — same result two ways. ~+$268K is large in dollars but within what noise produces over this sample: a Newey–West t ≈ 0.46 is p ≈ 0.65, i.e. chance beats it about two times in three. Big P&L is not a statistical edge; always read the t-stat on excess returns alongside the dollar figure.
+
+</details>
 
 ---
 
