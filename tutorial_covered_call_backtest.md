@@ -121,8 +121,8 @@ Answer from memory before revealing — if one doesn't come, that section is wor
 
 If I asked you, "How much should I charge for car insurance for a 25-year-old?" you'd need to know:
 
-- How likely is a crash? (volatility)
-- How much will it cost when it happens? (strike)
+- How wild a driver are we talking about? (volatility)
+- What's the coverage limit? (strike)
 - How long is the policy? (time)
 - How much will I earn from interest on the premiums? (interest rate)
 - What's the current car value? (stock price)
