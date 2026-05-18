@@ -102,14 +102,14 @@ Answer from memory before revealing — if one doesn't come, that section is wor
 
 1. A backtest that only ever traded Apple, Microsoft, and Google from 2000–2026 reports a 4,000% return. Name the enemy and explain why the number is suspect even if the code is bug-free.
 2. "I'll sell the call only on days I can see the stock drops tomorrow." Which enemy is that, and what single structural rule prevents it?
-3. The covered-call payoff is asymmetric. In which market does the overlay most *underperform* simply holding the stock — and why is that not a bug?
+3. A strategy is tuned until it returns 1000% on 2010–2020, then loses money on 2021–2026. Name the third enemy, and state the one-line structural fix Part 1 gives for it.
 
 <details>
 <summary>Reveal</summary>
 
 1. **Survivorship bias.** Those three are the *survivors*; the test silently excludes the firms that went to zero, so the figure is the return *conditional on having picked winners in advance* — which you can't actually do. The fix is testing a diverse universe, not just the names you already know made it.
 2. **Look-ahead bias** — using tomorrow's price for today's decision. The structural prevention: only ever use data available on the decision date (half-open windows, never peek forward). That's the same no-peeking discipline walk-forward enforces in Part 4.
-3. A **strong, sustained bull market**: the call is exercised and the upside above the strike is capped, so buy-and-hold wins. It's not a bug — the capped upside *is* the cost of the premium income; you deliberately traded the tail of the rally for steady cash. (Same asymmetry as the predict-then-reveal at the top of this Part.)
+3. **Overfitting** — the strategy was tuned to the noise in one period, so it fails on a different one. The fix Part 1 names: **walk-forward validation** — train on one period, test on a different period (developed fully in Part 4). That completes the three enemies: survivorship, look-ahead, overfitting.
 
 </details>
 
