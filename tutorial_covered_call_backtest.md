@@ -356,6 +356,15 @@ Note: The delta won't be exactly 0.25 after rounding to a whole dollar — that'
 
 ### Common Mistake: Confusing Historical Volatility with Implied Volatility
 
+**Predict first.** You're *selling* covered calls. You price each one by feeding Black-Scholes the stock's trailing 30-day historical volatility — say 16%. In reality the market trades those same options at an implied volatility nearer 20%. Does your backtest *overstate* or *understate* the premium income the strategy would actually have collected?
+
+<details>
+<summary>Reveal</summary>
+
+**It understates it — this bias runs conservative, the opposite of most backtest sins.** A higher volatility input means a fatter Black-Scholes premium, and you are the one *receiving* that premium. Real options trade at IV, which sits structurally above HV most of the time (the volatility risk premium). Feed the model raw HV and every simulated premium comes out too small, so the backtest under-counts the income the live strategy would earn. Direction is everything: assume HV *above* IV instead and you'd overstate income, and the real strategy would quietly disappoint. That asymmetry — and the fact that the gap isn't constant — is exactly why the engine never prices off raw HV; it scales HV up toward IV, regime by regime, in the next section.
+
+</details>
+
 **Historical volatility (HV)** = How much the stock bounced around in the past
 
 - Example: "SPY moved ±1% per day on average over the last 30 days"
@@ -403,6 +412,25 @@ We implement this regime-based approach in Part 3's `run_cc_overlay()` engine.
 ![Two volatility series for MSFT, 2016–2026: trailing 30-day realized vol (gray) and the regime-scaled IV proxy (blue), with the gap between them shaded. Horizontal bands at the 15% and 25% thresholds label the low/normal/high regimes and their 1.5×/1.3×/1.1× multipliers. Realized vol spikes to ≈110% in the March 2020 crash, where the blue–gray gap visibly compresses.](docs/figures/05_implied_vs_realized_vol.png)
 
 *The proxy made visible. Four of the five Black-Scholes inputs are observable to the penny; this chart is the fifth. The shaded band is the assumed HV→IV markup, and it is not constant: it is widest in the low-vol regime (1.5×) and pinches shut in the 2020 panic (1.1×), exactly the regime-dependent behavior the multiplier table encodes. Every option price in the backtest inherits whatever error lives in that gap.*
+
+### Check Your Understanding
+
+Answer from memory before revealing — if one doesn't come, that section is worth a reread before Part 3 builds on it.
+
+1. The backtest needs an *IV proxy* instead of just reading implied volatility off the data. What's missing, and what observable do we substitute?
+2. Daily volatility is annualized by ×√252, not ×252. Why the square root?
+3. You sell a 0.25Δ call. In one sentence, what does that 0.25 actually tell you about the trade?
+4. The regime multiplier is **1.5× in the low-vol regime but only 1.1× in the high-vol regime** — larger when realized vol is *lower*. Why that inverse direction, and what would a single flat multiplier miss?
+
+<details>
+<summary>Reveal</summary>
+
+1. There is **no historical option-price data**, so implied volatility can't be extracted from the dataset. The only observable is the stock's price history, so we compute rolling **historical** volatility and scale it up to approximate IV.
+2. Variance grows linearly with time; volatility is its square root, so it scales with **√time**. With 252 trading days per year, daily σ × √252 = annual σ. (Scaling by 252 instead would overstate annual vol roughly 16×.)
+3. Roughly a **25% probability the call finishes in-the-money** — i.e., about a 25% chance the shares get called away — which is also the option's first-derivative sensitivity to the stock price.
+4. The HV→IV gap (the volatility risk premium) is **widest when realized vol is low** — the market still prices in elevated future vol (mean reversion) — and **compresses when vol is already high**, as HV catches up to IV. A single flat multiplier would over-mark options in calm markets and under-mark them in panics; the regime ladder tracks the gap instead of assuming it's constant.
+
+</details>
 
 ---
 
