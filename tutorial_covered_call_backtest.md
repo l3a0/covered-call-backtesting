@@ -1434,6 +1434,23 @@ Here's the complete process:
 
 The Israelov & Nielsen (2015) risk-managed covered call used to live here as item 9; it's now built and measured in [Part 5's risk-managed subsection](#risk-managed-covered-calls-stripping-out-the-equity-timing-wiggle) — set `delta_hedge: True` in `params` to run it.
 
+### Check Your Understanding
+
+The integrative one — these pull threads from every Part. Answer from memory before revealing.
+
+1. In the pipeline, walk-forward is step 5 and the robustness checks are step 6. Why is walk-forward its own gate rather than just one more robustness check — and why are the robustness checks deliberately *plural*?
+2. This backtest posts ~915% total return, Monte Carlo percentile 100, robust sensitivity, profit in every regime, and Sharpe ~1.12 — alongside a Newey-West t ≈ 0.46. A skeptic should weigh which single number most heavily, and what exact claim does it refute?
+3. Suppose every check above comes back green. Name a real-world way the strategy could still fail that none of walk-forward, Monte Carlo, sensitivity, regime, or the t-stat rules out.
+
+<details>
+<summary>Reveal</summary>
+
+1. Walk-forward is the **primary anti-overfitting gate**: it produces the honest out-of-sample number by never letting parameters see their test window. The robustness checks are **complementary**, each catching a different failure mode — Monte Carlo (sequence luck), sensitivity (a fragile optimum), regime (fair-weather strategy), Newey-West (excess indistinguishable from zero). None is a wall on its own; confidence comes from independent layers agreeing.
+2. The **Newey-West t ≈ 0.46**. The other numbers establish that the strategy makes money, isn't sequence-luck, and isn't fragile — but almost all of that return is *the stock*. The t-stat on *excess* returns is the only test of the contested claim — "the overlay adds value beyond just holding MSFT" — and it fails on this single-stock 10-year sample. Large absolute numbers don't answer the marginal-value question.
+3. Any of: a **structural regime change** (the future stops resembling the past — none of these tests sees forward); **look-ahead through the human** (you saw the walk-forward result and chose to keep the approach — leakage the code can't prevent, which is why a never-touched holdout exists); **single-stock luck** (MSFT specifically — hence multi-asset testing); or **live frictions** the model omits (gaps, earnings IV crush, real fills). The toolkit bounds in-sample overfitting; it does not certify the future. That's what the holdout, multi-asset tests, and paper trading are for.
+
+</details>
+
 ---
 
 ## Part 7: Key Takeaways & Cheat Sheet
