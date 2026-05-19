@@ -138,6 +138,7 @@ If you use an analogy (e.g., "USB for AI"), plant it once early and call it back
 - **Passive voice (usually).** "Mistakes were made" hides the actor. "The Fed raised rates" is clearer than "rates were raised."
 - **Filler transitions.** "Now let's turn to..." or "Moving on to the next point..." — just move on. The subheading does the work.
 - **The "X is not Y — it's Z" contrastive idiom (when the contrast is dead weight).** If the reader wasn't likely to think Y in the first place, drop the negation and just state Z. Keep the contrast only when Y names a misconception the reader probably holds — in that case the negation does pedagogical work and earns its place. Examples of dead weight: *"The constants aren't decorative — they solve a bias-variance tradeoff"* → *"The constants solve a bias-variance tradeoff."* Example worth keeping: *"That's not a mistake; it's the business you signed up for"* — the reader IS likely to read assignment as a mistake.
+- **Unsubstantiated superlatives and editorial asides.** "One of the most X in finance," "the key insight that changed everything," "the most important rule," "this is the hardest part" — flourishes with the grammar of fact that can't be sourced or measured. **Default to deleting the aside, not softening it:** if the sentence before it already makes the substantive point, the flourish carries no information and the "cut redundancy" rule applies — just end the sentence. Soften to a modest, true version *only* when it delivers pedagogical signal the reader actually needs (e.g. "this commonly trips people up" reassures a learner that confusion is normal; "one of the most-confused identities in finance" does not). When the choice is soften-vs-cut and the aside isn't pulling weight, cut. The substantive claim it was decorating almost always stands on its own — and if the importance is real, ground it in evidence the repo pins (a number, a test, a cross-linked result), not a superlative.
 
 ---
 
@@ -186,6 +187,7 @@ When asked to edit or improve an existing draft:
 - [ ] Do more than two consecutive paragraphs start with "I"?
 - [ ] Does the subtitle share keywords with the title?
 - [ ] For each "X is not Y — it's Z" construction, does Y name a misconception the reader actually holds? If not, drop the negation and just state Z.
+- [ ] Does any sentence assert importance/difficulty/prevalence with a superlative or editorial aside ("the most important rule," "changed everything," "one of the most-confused in finance")? If it can't be sourced or measured, cut the aside (the substantive sentence stands alone) or, if the importance is real, replace it with the pinned evidence — a number, test, or cross-linked result.
 
 ---
 
