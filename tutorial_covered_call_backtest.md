@@ -438,7 +438,7 @@ Answer from memory before revealing — if one doesn't come, that section is wor
 
 ### The Core Rule: "Never Sell Your Shares"
 
-This is the invariant the rest of the engine is built around. It's what makes this an income *overlay* — premium collected on top of a share position you would hold anyway — rather than a directional bet on the stock: [`run_cc_overlay`](https://github.com/l3a0/covered-call-backtesting/blob/main/cc_backtest.py#L201) never liquidates the underlying; only the short call cycles (sell → expire or assign → sell again). Why it earns its place rather than just sounding sensible: holding through every regime instead of timing exits is exactly what produces the defensive return profile measured in [Part 5's regime analysis](#regime-analysis-does-it-work-in-bulls-bears-and-sideways) — the overlay's per-day edge there is roughly 10× larger in bear and sideways markets (~$23/day bull vs. ~$303 / ~$402) precisely *because* it keeps selling against the same shares no matter the trend. Abandon the rule and you forfeit that profile.
+This is the invariant the rest of the engine is built around. It's what makes this an income *overlay* — premium collected on top of a share position you would hold anyway — rather than a directional bet on the stock: [`run_cc_overlay`](https://github.com/l3a0/covered-call-backtesting/blob/main/cc_backtest.py#L201) never liquidates the underlying; only the short call cycles (sell → bought back, expires, or assigns → sell again). Why it earns its place rather than just sounding sensible: holding through every regime instead of timing exits is exactly what produces the defensive return profile measured in [Part 5's regime analysis](#regime-analysis-does-it-work-in-bulls-bears-and-sideways) — the overlay's per-day edge there is roughly 10× larger in bear and sideways markets (~$23/day bull vs. ~$303 / ~$402) precisely *because* it keeps selling against the same shares no matter the trend. Abandon the rule and you forfeit that profile.
 
 **Mistake:** Selling a 0.60Δ call, hoping the stock goes down, so you keep the premium AND the shares. If it rises above the strike, the shares get called away at a loss.
 
@@ -667,14 +667,14 @@ At the end of the loop, the function tallies summary statistics — total return
 
 Answer from memory before revealing — if one doesn't come, that section is worth a reread before Part 4 builds on it.
 
-1. "Never sell your shares" is *the* rule. When a short call ends up in-the-money at expiration, what does the overlay do with the underlying — and why does that make it an *overlay* rather than market timing?
+1. "Never sell your shares" is *the* rule. When a short call goes deep in-the-money, what does the overlay actually do — and why does that make it an *overlay* rather than market timing?
 2. Before expiration the state machine has exactly two early-close triggers. Name both and give the one-line reason for each.
 3. The engine charges 3% slippage + $0.65/contract on every trade. Roughly what share of annual returns do costs consume, and what does the engine do when costs would exceed the credit?
 
 <details>
 <summary>Reveal</summary>
 
-1. The share position is **permanent** — it is never discretionarily sold. If the call finishes ITM the shares are assigned at the strike and the overlay simply re-establishes and sells the next call; only the short call cycles. Liquidating shares to dodge assignment would make it a market-timing bet on the stock, which is the opposite of running an income overlay on a position you hold anyway.
+1. The share position is **permanent** — the engine never liquidates the underlying. When a short call goes deep ITM it **buys the call back** at delta > 0.70 (the `close_itm` rule) specifically to avoid assignment; assignment happens only as a fallback, when a call reaches expiration still ITM without the 0.70 or profit-target gate having closed it first — and even then the shares are modeled as held (the overlay books `premium − (price − strike)` while the stock's appreciation up to the strike stays in equity). Either path cycles only the *short call*, never the shares. Liquidating shares to dodge assignment would make it a market-timing bet on the stock, the opposite of running an income overlay on a position you hold anyway.
 2. **(a) 75% of the premium captured** → lock in most of the decay without riding through the gamma-heavy final stretch; **(b) delta > 0.70 (deep ITM)** → close to cap assignment damage before gamma compounds it. Anything short of those two: hold and recheck tomorrow.
 3. Roughly **5–10% of returns** over a year of ~monthly trades. If costs would exceed the credit (a near-worthless deep-OTM call), the engine **skips the trade** rather than open at a guaranteed loss.
 
