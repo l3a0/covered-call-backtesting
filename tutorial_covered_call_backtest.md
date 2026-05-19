@@ -549,7 +549,7 @@ This is where backtests often lie.
 
 **Reality:**
 
-- You pay $0.65 per contract to open ($65 for a 100-share contract, or $0.65 per share)
+- You pay $0.65 per contract to open (a contract covers 100 shares, so $0.65 per contract = $0.0065 per share)
 - You pay $0.65 per contract to close
 - You have slippage: the bid-ask spread might mean you sell the call for 95¢ but it's worth $1.00
 
