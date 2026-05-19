@@ -946,8 +946,10 @@ close_at_pct sensitivity:
 Strategy is ROBUST: both params produce single-digit-percent drops under
 realistic perturbations. Worth noting: the base config isn't always the
 optimum — close_at_pct=0.65 outperforms the default 0.75 by ~42 pp here,
-hinting at a small in-sample optimization opportunity (which walk-forward
-in Part 4 lets you exploit honestly without overfitting).
+hinting at a small in-sample optimization opportunity. Hardcoding
+close_at_pct=0.65 on that basis is the in-sample peeking Part 4
+warns about; walk-forward is the honest test of whether such an
+edge survives.
 
 Math behind the call_delta sensitivity:
   base = 915%, worst variant = 827% (at -0.05 offset, i.e., 0.20Δ)
