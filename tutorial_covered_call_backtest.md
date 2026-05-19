@@ -1069,11 +1069,11 @@ This assumes daily observations are IID — Independent and Identically Distribu
 
 **Identically distributed fails.** Your own `detect_regime()` function explicitly classifies returns into low-vol, normal-vol, and high-vol regimes — acknowledging that returns come from *different* distributions depending on which regime we're in.
 
-When IID is violated, the naive formula systematically *understates* the standard error, which inflates the t-stat by 30–100%. You think you have a real edge when you don't.
+When IID is violated, the naive formula misstates the standard error; the direction depends on the sign of short-lag autocorrelation (treated later in this section). You can be led to believe in an edge that isn't there, or miss one that is — both are possible failure modes.
 
 #### Autocorrelation and Heteroskedasticity: What They Actually Mean
 
-The two IID failures we just named have proper names in the statistics literature, and those names are baked right into "Newey-West **HAC**" (often abbreviated **NW**) — **Heteroskedasticity and Autocorrelation Consistent**. Worth understanding each one before applying the fix, because both are everywhere in financial data and both inflate naive t-stats in slightly different ways.
+The two IID failures we just named have proper names in the statistics literature, and those names are baked right into "Newey-West **HAC**" (often abbreviated **NW**) — **Heteroskedasticity and Autocorrelation Consistent**. Worth understanding each one before applying the fix, because both are everywhere in financial data and both bias the naive formula in slightly different ways.
 
 **Autocorrelation: when today depends on yesterday.**
 
@@ -1140,7 +1140,7 @@ Doubling your sample only buys you ~17% more lags (`2^(2/9) ≈ 1.17`). The form
 
 The intuition transfers nicely. If your data has long memory (momentum factors, volatility clusters, slowly mean-reverting overlay P&L), the formula picks up enough lags to handle it. If the data is nearly IID, the few-lag NW correction barely changes the standard error from the naive version. Either way, it auto-adapts — you don't have to tune the bandwidth by hand for each dataset.
 
-**Bottom line: report the Newey-West t-stat, not the naive one.** On near-IID data NW reduces to nearly the naive value at no cost; on the autocorrelated data you actually have, the naive formula quietly inflates the t-stat by 30–100%. There's no scenario where the naive version is the safer call.
+**Bottom line: report the Newey-West t-stat, not the naive one.** On near-IID data NW reduces to nearly the naive value at no cost; on the autocorrelated data you actually have, the naive SE is biased (in either direction depending on the sign of short-lag autocorrelation — see the subsection below).
 
 #### The Code
 
@@ -1310,7 +1310,7 @@ Answer from memory before revealing — if one doesn't come, that section is wor
 <details>
 <summary>Reveal</summary>
 
-1. **Independence fails** — one 21-DTE option drives P&L for up to 21 days, so consecutive overlay returns share a driver (autocorrelation). **Identically-distributed fails** — `detect_regime` itself says returns come from different vol regimes (heteroskedasticity). Both make the naive formula *understate* the standard error, inflating the t-stat by ~30–100%. Newey–West (HAC) corrects for exactly autocorrelation + heteroskedasticity, which is why we report ~0.46, not the inflated ~0.40.
+1. **Independence fails** — one 21-DTE option drives P&L for up to 21 days, so consecutive overlay returns share a driver (autocorrelation). **Identically-distributed fails** — `detect_regime` itself says returns come from different vol regimes (heteroskedasticity). Both bias the naive standard error; **Newey–West (HAC)** corrects for exactly autocorrelation + heteroskedasticity. *In this backtest* the correction nudges naive `0.40` *up* to NW `0.46` — short-lag autocorrelation here is net *negative* (mean-reverting), the opposite sign from the more common positive-autocorrelation case where NW would *shrink* the t. Either way, NW is the one to report.
 2. It preserves the daily-return **set** (same mean, vol, distribution) and destroys their **order** (trends, clusters, sequence). Beating the shuffles proves the overlay harvests a *distributional* property (volatility), not a lucky sequence. It does **not** prove the overlay beats buy-and-hold — the shuffle mean (~657%) is itself enormous because that's mostly the *stock*; that's why significance is tested on *excess* returns, not raw return.
 3. Bull days dominate the count (1,690 of 2,515), so they sum to the biggest dollar total — but the per-day edge is ~10× higher in bear/sideways (~$23 vs. ~$303 / ~$402 a day). The *per-day* number, not the dollar total, shows the overlay earns its keep when the market is anything but a one-way bull.
 4. No — same result two ways. ~+$268K is large in dollars but within what noise produces over this sample: a Newey–West t ≈ 0.46 is p ≈ 0.65, i.e. chance beats it about two times in three. Big P&L is not a statistical edge; always read the t-stat on excess returns alongside the dollar figure.
@@ -1548,7 +1548,7 @@ pytest                           # runs the test suite
 | **Wrong delta interpretation** | You think 0.50Δ = 50% probability of profit | Delta = probability of being ITM at expiration (mathematically) or equivalent stock hedge (practically) |
 | **Holding too long (close_at_pct too high)** | You set close_at_pct=1.0 (hold to expiry); miss early profit opportunities | Use close_at_pct of 0.50–0.75; capture most of the premium decay without waiting for expiration risk |
 | **Confusing dollar P&L with edge** | Backtest shows "+$268K excess profit"; strategy is actually statistically indistinguishable from buy-and-hold | Compute Newey-West t-stat on daily excess returns (overlay minus benchmark). Aim for `\|t\| > 2` (conventional) or `\|t\| > 3` (Harvey-Liu-Zhu adjusted for multiple testing). Use the `compute_statistics()` helper and read the t-stat alongside the dollar P&L — not in isolation |
-| **Naive t-stat on autocorrelated returns** | You compute t = mean / (std/√n) and get an inflated number that disappears in live trading | Always use Newey-West HAC standard errors when measuring t-stats on overlay or any held-position strategy. Same formula otherwise undersizes the standard error by 30–100% because consecutive-day P&Ls share a common driver (the open option position) |
+| **Naive t-stat on autocorrelated returns** | The naive t = mean/(std/√n) assumes IID, which overlay returns aren't (one 21-DTE option drives ~21 days of P&L). The SE estimate is biased — direction depends on the sign of short-lag autocorrelation. | Always use Newey-West HAC standard errors when measuring t-stats on overlay or any held-position strategy. |
 
 ---
 
