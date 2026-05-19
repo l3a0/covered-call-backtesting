@@ -397,7 +397,7 @@ In the production engine `estimate_iv(rolling_vol)` does steps 2 and 3 together 
 
 **Why these multipliers?**
 
-- Empirically, implied volatility tends to be 20–40% higher than realized volatility
+- As a rough practitioner rule of thumb, implied volatility tends to run on the order of 20–40% above realized volatility — the **volatility risk premium** (Bakshi & Kapadia 2003; Coval & Shumway 2001 establish the premium's existence and sign; the specific band is lore, not a figure from those papers)
 - But the gap **varies by regime**: when vol is already high, IV doesn't spike as much above HV; when vol is low, IV tends to stay well above HV (mean-reversion pricing)
 - The regime-based approach (1.1×/1.3×/1.5×) captures this dynamic better than a flat constant
 
