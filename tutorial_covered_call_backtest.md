@@ -436,9 +436,9 @@ Answer from memory before revealing — if one doesn't come, that section is wor
 
 ## Part 3: The Covered Call Overlay Engine
 
-### The Key Insight That Changed Everything: "Never Sell Your Shares"
+### The Core Rule: "Never Sell Your Shares"
 
-This is the most important rule of covered call backtesting.
+This is the invariant the rest of the engine is built around. It's what makes this an income *overlay* — premium collected on top of a share position you would hold anyway — rather than a directional bet on the stock: [`run_cc_overlay`](https://github.com/l3a0/covered-call-backtesting/blob/main/cc_backtest.py#L201) never liquidates the underlying; only the short call cycles (sell → expire or assign → sell again). Why it earns its place rather than just sounding sensible: holding through every regime instead of timing exits is exactly what produces the defensive return profile measured in [Part 5's regime analysis](#regime-analysis-does-it-work-in-bulls-bears-and-sideways) — the overlay's per-day edge there is roughly 10× larger in bear and sideways markets (~$23/day bull vs. ~$303 / ~$402) precisely *because* it keeps selling against the same shares no matter the trend. Abandon the rule and you forfeit that profile.
 
 **Mistake:** Selling a 0.60Δ call, hoping the stock goes down, so you keep the premium AND the shares. If it rises above the strike, the shares get called away at a loss.
 
