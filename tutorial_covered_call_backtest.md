@@ -1226,7 +1226,7 @@ Our excess returns show mild day-to-day mean reversion — likely from the way p
 
 ![Bar chart of the autocorrelation of daily excess P&L at lags 1–20. Most bars sit just below zero; the bars inside the Newey-West window (lags 1–8) are predominantly negative, and almost all lie within a shaded ±1.96/√n white-noise band.](docs/figures/11_excess_acf.png)
 
-*The sign that flips the correction's direction. The IID t-stat assumes every bar here is zero. They aren't — but they lean *negative* across the lags Newey-West actually weights, not positive. Negative short-lag autocovariance means the effective sample is slightly larger than a naive day-count, so the HAC correction nudges 0.40 up to 0.46 rather than shrinking it. This is the picture behind "Newey-West can move the t-stat either way."*
+*The sign that flips the correction's direction. The IID t-stat assumes every bar here is zero. They aren't — but they lean *negative* across the lags Newey-West actually weights, not positive. Negative short-lag autocovariance means the effective sample is slightly larger than a naive day-count, so the HAC correction nudges 0.40 up to 0.46 rather than shrinking it. This is the picture behind "Newey-West can move the t-stat either way." (Computation: standard sample autocovariance γₖ = (1/n)·Σ(eᵢ−ē)(eᵢ₊ₖ−ē) on daily excess returns — the same formula that feeds the NW SE in [`compute_statistics`](https://github.com/l3a0/covered-call-backtesting/blob/main/cc_backtest.py#L599); the bars above are the normalized version γₖ/γ₀.)*
 
 #### Why Is This Lower Than the Volatility Risk Premium Literature?
 
