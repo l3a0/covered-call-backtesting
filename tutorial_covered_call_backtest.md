@@ -1111,7 +1111,7 @@ The Newey-West correction widens the standard error to account for autocorrelati
 Var(mean) = (1/n) · [γ₀ + 2 · Σₖ wₖ · γₖ]
 ```
 
-where γₖ is the autocovariance of excess returns at lag k, and wₖ = 1 − k/(L+1) are Bartlett weights — a smoothing kernel that gives lag 0 full weight, then tapers linearly to zero at lag L, ensuring distant noisy lags don't blow up the variance estimate. Intuitively: Newey-West asks "how much *effectively independent* information do I have, given that consecutive observations are correlated?" — then sizes the standard error accordingly.
+where γₖ is the autocovariance of excess returns at **lag k** (k days apart — lag 0 is just the variance, lag 1 is today vs. yesterday), and wₖ = 1 − k/(L+1) are **Bartlett weights** — a smoothing **kernel** (the math word for a weighting scheme over the lags) that gives lag 0 full weight, then tapers linearly to zero at lag L, ensuring distant noisy lags don't blow up the variance estimate. Intuitively: Newey-West asks "how much *effectively independent* information do I have, given that consecutive observations are correlated?" — then sizes the standard error accordingly.
 
 The lag cutoff follows [Andrews (1991)](https://www.jstor.org/stable/2938229): `L = floor(4 · (n/100)^(2/9))`. For our 10-year MSFT sample (~2,500 days), that's 8 lags.
 
