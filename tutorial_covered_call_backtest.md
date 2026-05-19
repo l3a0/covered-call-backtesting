@@ -920,7 +920,7 @@ The implementation is [`cc_backtest.py::monte_carlo_shuffle`](https://github.com
 - MC percentile: 100 (our strategy beat 100% of random shuffles — the real return is higher than every single shuffled path's, with the shuffle max at ~870%)
 - This means: 0% of random price orderings produced a better return than our strategy did on the real price path.
 
-**Interpretation:** The strategy beats randomized price paths — it exploits real price patterns, not just luck. A percentile above 80 indicates genuine skill.
+**Interpretation:** Clearing the shuffled distribution rules out *sequence-luck* — the result survives destroying the trends and clusters. It does **not** establish skill or an edge over buy-and-hold: the shuffle mean (~657%) is itself enormous because that's mostly the stock. Whether the overlay specifically adds value is the separate question the Newey-West test in *Statistical Significance* answers — in the negative.
 
 ![Histogram of total overlay returns across 500 shuffled price paths, roughly bell-shaped and centered near 657%. A dotted line marks the shuffle mean, a dashed line the best shuffle at ≈870%, and a solid red line at ≈915% sits to the right of the entire distribution — the real ordered path, beyond every shuffle.](docs/figures/09_monte_carlo.png)
 
