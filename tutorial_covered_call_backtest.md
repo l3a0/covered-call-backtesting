@@ -596,20 +596,6 @@ Four pedagogical notes worth pulling out, because they show up in every volatili
 - Annualized: 1.2% × √252 ≈ 1.2% × 15.87 ≈ **19%**
 - IV estimate: 19% × 1.3 = **24.7%**
 
-### The SMA Trend Filter: 50-Day and 200-Day Moving Averages
-
-Some wheel traders use a trend filter to decide *when* to sell options. The key insight: the filter matters more for **which phase** you're in.
-
-**CSP phase (selling puts) — avoid downtrends:** If the stock is falling, you don't want to sell puts and get assigned at a price that keeps dropping. Wait for stabilization (SMA50 > SMA200) before selling puts.
-
-**CC phase (selling calls) — sell in any trend:** If you already hold shares and the stock is declining, selling calls is *exactly* what you want. You collect premium, reduce your cost basis, and the calls expire worthless (the stock isn't rising to your strike). Not selling calls in a downtrend means sitting on losses with no income to cushion them.
-
-**CC phase — strong uptrends are the real risk:** If the stock is surging, your call gets exercised and you're called away, capping your upside. But in the wheel, getting called away just cycles you back to selling puts — so it's not a disaster, just a missed rally.
-
-> **Note — the big tradeoff vs. buy-and-hold:** Premiums are small and steady; rallies are rare and huge. If you repeatedly get called away during strong uptrends, the capped upside compounds against you, and the strategy can materially **underperform a pure buy-and-hold** of the same stock. Covered calls trade lottery-ticket upside for consistent income — that's the deal, and it only looks good if you actually prefer smoother returns to maximizing total return.
-
-None of this lives in the engine — `sma`/`is_uptrend` sketch the golden-cross idea but aren't functions in the codebase. **Empirical finding (from the Part 4 walk-forward):** the filter didn't earn its keep. Its job is to pause CSPs when SMA50 < SMA200 so you don't get assigned into a falling stock, but the wheel is defensive enough that entering in a downtrend still works out — premiums cushion the drawdown, and once assigned you collect CC income on the recovery. So [`cc_backtest.py::run_cc_overlay`](https://github.com/l3a0/covered-call-backtesting/blob/main/cc_backtest.py#L201) ships **no entry trend filter at all**: in the CC phase it sells in every regime, exactly as the CSP-vs-CC reasoning above argues.
-
 ### The Run_cc_overlay() Function: Full Walkthrough
 
 The core backtesting engine lives in [`cc_backtest.py::run_cc_overlay`](https://github.com/l3a0/covered-call-backtesting/blob/main/cc_backtest.py#L201). It's heavily commented and small enough to read end-to-end. Function signature:
@@ -831,11 +817,6 @@ All three *per-axis* winners match the `__main__` defaults: `0.25Δ`, `21 DTE`, 
 4. **Deep-ITM close at delta > 0.70** caps assignment damage:
    - When the call goes deep ITM, gamma is steep and a small adverse move can wipe out months of premium income
    - Closing early at the 0.70-delta threshold gives up the last sliver of time value to escape before assignment crystallizes the full upside loss
-
-5. **No trend filter** is surprising:
-   - In the CC phase, selling calls in a downtrend is actually *desirable* — it reduces your cost basis and generates income while you wait for recovery
-   - Premiums are richest during downtrends (high vol), so that's when call selling is most rewarding
-   - A trend filter mainly helps the CSP phase (avoid selling puts into a falling market), but the backtest found it wasn't worth the complexity
 
 ### The Key Finding: Walk-Forward Tells the Honest Story
 
@@ -1422,15 +1403,16 @@ Here's the complete process:
 
 **To make this production-ready:**
 
-1. **Actual option prices:** Use OptionMetrics or similar to get real IV and prices
-2. **Earnings calendar:** Avoid selling calls in the week before earnings
-3. **VIX regime switching:** Adjust delta based on VIX level (high VIX → be more defensive, sell lower deltas further OTM — you still collect decent premium because high IV inflates prices even at lower deltas, and the extra buffer protects against the larger price swings that high-vol environments produce)
-4. **Rolling logic:** Model rolling ITM calls for credits, not just buying back
-5. **Portfolio optimization:** Test on 10–20 stocks, optimize correlation effects
-6. **Slippage modeling:** Account for bid-ask widening on high-volatility days
-7. **Strategy-vs-cash significance test:** Add a second mode to `compute_statistics` that benchmarks the CC strategy's *total* return against the risk-free rate (not against buy-and-hold). This is the comparison the academic VRP literature reports, and it's the right way to put our backtest on equal footing with published BXM/PUT t-stats
-8. **Index ETF test:** Run the same strategy on SPY or QQQ. Single-stock VRP is structurally weaker than index VRP because index options have richer insurance demand. If the t-stat moves substantially toward the academic range when we switch underlyings, that confirms the gap was about *what* we backtested, not *how* we backtested
-9. **7-DTE close rule:** Close any open position when fewer than 7 days remain to expiration, regardless of profit target or delta. The current engine triggers on expiration itself, profit-target, or deep ITM (`delta > 0.70`) — so a position that drifts into the gamma-heavy final week without hitting either still has to ride through it. Adding a `min_dte_to_close` parameter (e.g., default 7) is the conventional fix and matches the *Gamma risk* warning in the glossary. Effect on results is probably small on bullish underlyings like MSFT (the delta-0.70 trigger already catches most of these positions early) but would be more visible on volatile or sideways tickers where positions can sit near-ATM into the final week without becoming deep ITM
+1. **Actual option prices:** Use OptionMetrics or similar to get real IV and prices.
+2. **Earnings calendar:** Avoid selling calls in the week before earnings.
+3. **VIX regime switching:** Adjust delta based on VIX level (high VIX → be more defensive, sell lower deltas further OTM — you still collect decent premium because high IV inflates prices even at lower deltas, and the extra buffer protects against the larger price swings that high-vol environments produce).
+4. **Rolling logic:** Model rolling ITM calls for credits, not just buying back.
+5. **Portfolio optimization:** Test on 10–20 stocks, optimize correlation effects.
+6. **Slippage modeling:** Account for bid-ask widening on high-volatility days.
+7. **Strategy-vs-cash significance test:** Add a second mode to `compute_statistics` that benchmarks the CC strategy's *total* return against the risk-free rate (not against buy-and-hold). This is the comparison the academic VRP literature reports, and it's the right way to put our backtest on equal footing with published BXM/PUT t-stats.
+8. **Index ETF test:** Run the same strategy on SPY or QQQ. Single-stock VRP is structurally weaker than index VRP because index options have richer insurance demand. If the t-stat moves substantially toward the academic range when we switch underlyings, that confirms the gap was about *what* we backtested, not *how* we backtested.
+9. **7-DTE close rule:** Close any open position when fewer than 7 days remain to expiration, regardless of profit target or delta. The current engine triggers on expiration itself, profit-target, or deep ITM (`delta > 0.70`) — so a position that drifts into the gamma-heavy final week without hitting either still has to ride through it. Adding a `min_dte_to_close` parameter (e.g., default 7) is the conventional fix and matches the *Gamma risk* warning in the glossary. Effect on results is probably small on bullish underlyings like MSFT (the delta-0.70 trigger already catches most of these positions early) but would be more visible on volatile or sideways tickers where positions can sit near-ATM into the final week without becoming deep ITM.
+10. **Entry trend filter:** Add a parameterized SMA trend filter (gate entries on SMA50 vs. SMA200) as an on/off axis in the walk-forward grid. Today the engine ships no trend filter as an *a priori* design choice. The CC-phase argument (selling into downtrends is desirable for call sellers — premium collected, cost basis reduced) predicts it won't help on the call side, but that prediction is currently untested. Making it a searched parameter would turn the design choice into an empirical result.
 
 The Israelov & Nielsen (2015) risk-managed covered call used to live here as item 9; it's now built and measured in [Part 5's risk-managed subsection](#risk-managed-covered-calls-stripping-out-the-equity-timing-wiggle) — set `delta_hedge: True` in `params` to run it.
 

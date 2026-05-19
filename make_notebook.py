@@ -188,24 +188,6 @@ print(
     f"\\nShortcut: Sharpe x sqrt(years) = {sh:.3f} x sqrt({yrs}) "
     f"= {sh * math.sqrt(yrs):.2f}  (vs naive t {stats['t_stat_naive']:+.2f})"
 )''',
-    "### The SMA Trend Filter: 50-Day and 200-Day Moving Averages": '''\
-# sma/is_uptrend aren't in the engine — run_cc_overlay has no trend filter.
-# Compute the SMA50 vs SMA200 golden-cross signal on the real MSFT closes
-# to see why the Part 4 walk-forward dropped it.
-trend = np.array([
-    prices[i - 50:i].mean() > prices[i - 200:i].mean()
-    for i in range(200, len(prices))
-])
-n_up = int(trend.sum())
-print(f"{trend.size} days with both SMAs defined")
-print(f"  SMA50 > SMA200 (uptrend):   {n_up:5d}  ({n_up / trend.size:5.1%})")
-print(f"  SMA50 < SMA200 (downtrend): {trend.size - n_up:5d}"
-      f"  ({1 - n_up / trend.size:5.1%})")
-print(
-    "\\nThe CC overlay sells in every regime, so this golden-cross signal\\n"
-    "would not have gated a single covered-call trade here — which is why\\n"
-    "the walk-forward search found the entry trend filter didn't earn its keep."
-)''',
     "### The Parameter Grid: What We Search Over and Why": '''\
 # Expand the 3x3x3 grid with the real helper the optimizer uses.
 from cc_backtest import _param_combinations
