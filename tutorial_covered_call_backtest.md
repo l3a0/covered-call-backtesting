@@ -1366,7 +1366,7 @@ Here's the complete process:
 **Good signs:**
 
 - Walk-forward efficiency (out-of-sample ÷ in-sample) stays healthy — roughly two-thirds is the common practitioner rule of thumb (Pardo 2008), not a small fraction. Treat the band as lore, not a law
-- Monte Carlo: real return percentile > 80% (beats randomized price paths)
+- Monte Carlo: real return clears the shuffle distribution (rules out sequence-luck — does not by itself establish edge; see the Newey-West test in Part 5)
 - Sensitivity: nearby parameters give similar results (not overfit)
 - Works in all regimes (not just bull markets)
 - Sharpe ratio > 0.8 (good risk-adjusted returns)
