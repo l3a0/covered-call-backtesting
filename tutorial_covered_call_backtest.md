@@ -1234,7 +1234,7 @@ The academic VRP literature ([Bakshi-Kapadia 2003](https://academic.oup.com/rfs/
 
 The papers test a different null hypothesis. They compare a short-vol portfolio's return to **cash** (the risk-free rate). We compare the overlay's return to **buy-and-hold of the same stock**. Both questions are valid; they isolate different things.
 
-When you compare to buy-and-hold, the stock's own return cancels and you're left measuring just the net premium contribution after assignments and buybacks. That's a small number with substantial noise — especially when your underlying is MSFT during a 10-year bull run that maximized assignment costs. When you compare to cash, you measure the *full* combined return of equity exposure plus premium income, which is much larger relative to its noise.
+When you compare to buy-and-hold, the stock's own return cancels and you're left measuring just the net premium contribution after assignments and buybacks. That's a small number with substantial noise — especially when your underlying is MSFT during a 10-year bull run that maximized assignment costs. Comparing to cash is two different tests in the literature: BXM-style indices score a full covered-call portfolio (equity exposure plus premium income) against the risk-free rate — the signal is padded by the equity risk premium. The delta-hedged tradition (Bakshi–Kapadia, Coval–Shumway) strips the equity out via continuous hedging — the signal is smaller, but the noise denominator shrinks much faster, so the t-stat lifts anyway. The tutorial does the second of these in [Risk-Managed Covered Calls](#risk-managed-covered-calls-stripping-out-the-equity-timing-wiggle) below; on MSFT it raises t from 0.46 to 1.63.
 
 Three other compounding factors:
 
