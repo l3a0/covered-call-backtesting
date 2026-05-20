@@ -1391,7 +1391,7 @@ Here's the complete process:
 - ✅ Monte Carlo: percentile 100 (real ordered path beats every one of 500 shuffled paths; max shuffled return \~870%)
 - ✅ Sensitivity: single-digit-% drops across both `call_delta` and `close_at_pct` perturbations
 - ✅ All regimes: bull, bear, sideways all profitable
-- ✅ Sharpe ratio vs cash (rf = 4.5%): \~1.12, vs buy-and-hold MSFT's \~0.72 over the same window — risk-adjusted *absolute* returns are strong
+- ✅ Sharpe ratio vs cash (**rf** = risk-free rate; 4.5% is the engine default — see the `risk_free_rate` parameter in [`run_cc_overlay`](https://github.com/l3a0/covered-call-backtesting/blob/main/cc_backtest.py#L201)): \~1.12, vs buy-and-hold MSFT's \~0.72 over the same window — risk-adjusted *absolute* returns are strong
 - ⚠️ **Newey-West t-stat on excess returns: 0.46** (overlay's *excess* over buy-and-hold is not statistically distinguishable from zero on this single-stock 10-year sample; see Part 5). The dollar P&L is real, but the evidence for "the overlay specifically is adding value beyond holding MSFT" doesn't clear the statistical bar. This is what the literature on single-stock CC underperformance vs. index CC predicts.
 
 ### The Limitations We Haven't Solved
