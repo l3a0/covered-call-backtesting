@@ -264,3 +264,19 @@ End any code-change response with a short **Consistency sweep** note listing wha
 ### When to skip
 
 Pure-internal refactors that don't move line numbers and don't change observable behavior (renaming a local variable inside a function body, reordering imports). Say "no prose-facing surfaces affected" so it's clear the check was considered, not forgotten.
+
+---
+
+## Committing Changes
+
+**Do not commit or push without explicit per-change review.** Each "commit" / "commit and push" instruction authorizes exactly the changes that were summarized to the user in the immediately prior turn — it is not a standing order. After that commit lands, the authorization is spent; the next change starts fresh, even if it's a tiny follow-up in the same conversation, even if it's a one-line prose tweak, even if the user just authorized a commit sixty seconds ago.
+
+The right pattern:
+
+1. Make the changes — *including* any mandatory mechanical follow-ups like `python make_notebook.py` (those still run automatically; see the regen rule in **Cross-Surface Consistency** above).
+2. Summarize the full set of staged-but-uncommitted changes (file list, one-line description of each, including the notebook regen if it ran).
+3. **Wait. Do not commit.**
+4. The user reviews and either authorizes the commit or asks for further edits.
+5. Commit exactly what was summarized. If new changes appeared between summary and commit, re-summarize and re-confirm — don't bundle unreviewed changes into an authorized commit.
+
+If you find yourself thinking "they already approved committing earlier in this session, so this small follow-up is fine" — stop. That reasoning is the exact failure mode this rule exists to prevent. The interaction with the regen rule is: the regen *runs* without asking (it's a mechanical consequence of the prior edit), but the *commit* of that regen still requires fresh approval like any other change.
