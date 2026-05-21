@@ -1483,8 +1483,6 @@ Is there an open position?
 9. **7-DTE close rule:** Close any open position when fewer than 7 days remain to expiration, regardless of profit target or delta. The current engine triggers on expiration itself, profit-target, or deep ITM (`delta > 0.70`) — so a position that drifts into the gamma-heavy final week without hitting either still has to ride through it. Adding a `min_dte_to_close` parameter (e.g., default 7) is the conventional fix and matches the *Gamma risk* warning in the glossary. Effect on results is probably small on bullish underlyings like MSFT (the delta-0.70 trigger already catches most of these positions early) but would be more visible on volatile or sideways tickers where positions can sit near-ATM into the final week without becoming deep ITM.
 10. **Entry trend filter:** Add a parameterized SMA trend filter (gate entries on SMA50 vs. SMA200) as an on/off axis in the walk-forward grid. Today the engine ships no trend filter by design. The CC-phase argument (selling into downtrends is desirable for call sellers — premium collected, cost basis reduced) predicts it won't help on the call side, but that prediction is currently untested. Making it a searched parameter would turn the design choice into an empirical result.
 
-The Israelov & Nielsen (2015) risk-managed covered call used to live here as item 9; it's now built and measured in [Part 5's risk-managed subsection](#risk-managed-covered-calls-stripping-out-the-equity-timing-wiggle) — set `delta_hedge: True` in `params` to run it.
-
 ### Resources for Further Learning
 
 **Theory:**
