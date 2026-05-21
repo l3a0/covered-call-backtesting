@@ -196,7 +196,7 @@ Think of it this way:
 
 If I want to test, "Would I have profited selling SPY calls on January 15, 2015?", I can't just look up what SPY calls cost that day—at least not easily or reliably. The data is expensive or incomplete.
 
-So we *estimate* option prices using Black-Scholes, assuming a volatility level. This is a simplification, but it's the standard approach.
+So we *estimate* option prices using Black-Scholes, feeding it an assumed volatility. That's a simplification. Real options don't trade at one flat number — the market bakes a different volatility into each strike, a pattern traders call the **volatility smile** — and a rigorous backtest would use historical option chains. But Black-Scholes is the canonical pricing model and a practical stand-in when that data isn't available.
 
 ### The Normal CDF (Cumulative Distribution Function) Approximation
 
