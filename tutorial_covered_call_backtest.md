@@ -1394,32 +1394,6 @@ Here's the complete process:
 - ✅ Sharpe ratio vs cash (**rf** = risk-free rate; 4.5% is the engine default — see the `risk_free_rate` parameter in [`run_cc_overlay`](https://github.com/l3a0/covered-call-backtesting/blob/main/cc_backtest.py#L201)): \~1.12, vs buy-and-hold MSFT's \~0.72 over the same window — risk-adjusted *absolute* returns are strong
 - ⚠️ **Newey-West t-stat on excess returns: 0.46** (overlay's *excess* over buy-and-hold is not statistically distinguishable from zero on this single-stock 10-year sample; see Part 5). The dollar P&L is real, but the evidence for "the overlay specifically is adding value beyond holding MSFT" doesn't clear the statistical bar. This is consistent with what the literature finds — single-stock CCs underperform index CCs on a risk-adjusted basis ([Israelov & Nielsen 2015](https://rpc.cfainstitute.org/research/financial-analysts-journal/2015/covered-calls-uncovered); see [Why Is This Lower Than the Volatility Risk Premium Literature?](#why-is-this-lower-than-the-volatility-risk-premium-literature) in Part 5 for the full case).
 
-### The Limitations We Haven't Solved
-
-1. **IV proxy (regime-based HV multiplier):** Even with regime switching (1.1×/1.3×/1.5×), this is a rough approximation. Real IV can spike 50%+ on bad news, especially around earnings.
-2. **No gap risk:** We assume you can always close at model prices. Reality: market gaps at open, especially on earnings.
-3. **No dividend handling:** MSFT pays dividends; our model ignores them (small effect, but nonzero).
-4. **No earnings avoidance:** Selling calls into earnings is dangerous (IV crush, whipsaws). We should avoid this.
-5. **No rolling:** We modeled buying back and selling new as separate events, but real traders often "roll" — a single combined order that closes the old call and opens a new one simultaneously, often for a net credit. Example: your old call costs $0.50 to buy back, the new call sells for $2.00 → rolling combines them into one order for a $1.50 net credit, with one fill instead of two and often better pricing since brokers optimize combo orders. Our backtest treats these as independent transactions, so real performance could be slightly better due to reduced slippage.
-6. **Commission simplification:** We assumed $0.65 per contract. Real costs vary by broker.
-
-### What We'd Add Next
-
-**To make this production-ready:**
-
-1. **Actual option prices:** Use OptionMetrics or similar to get real IV and prices.
-2. **Earnings calendar:** Avoid selling calls in the week before earnings.
-3. **VIX regime switching:** Adjust delta based on VIX level (high VIX → be more defensive, sell lower deltas further OTM — you still collect decent premium because high IV inflates prices even at lower deltas, and the extra buffer protects against the larger price swings that high-vol environments produce).
-4. **Rolling logic:** Model rolling ITM calls for credits, not just buying back.
-5. **Portfolio optimization:** Test on 10–20 stocks, optimize correlation effects.
-6. **Slippage modeling:** Account for bid-ask widening on high-volatility days.
-7. **Strategy-vs-cash significance test:** Add a second mode to `compute_statistics` that uses the risk-free rate as the benchmark instead of buy-and-hold — i.e., test the mean of *daily* excess returns `r_strategy,t − rf_t` against zero with the same Newey-West machinery, instead of `overlay_ret − bh_ret`. This is the comparison the academic VRP literature reports (BXM/PUT papers test strategy returns against cash, not against the underlying), and it's the right way to put our backtest on equal footing with their published t-stats. Same null structure as today's test, different benchmark series.
-8. **Index ETF test:** Run the same strategy on SPY or QQQ. Single-stock VRP is structurally weaker than index VRP because index options have richer insurance demand. If the t-stat moves substantially toward the academic range when we switch underlyings, that confirms the gap was about *what* we backtested, not *how* we backtested.
-9. **7-DTE close rule:** Close any open position when fewer than 7 days remain to expiration, regardless of profit target or delta. The current engine triggers on expiration itself, profit-target, or deep ITM (`delta > 0.70`) — so a position that drifts into the gamma-heavy final week without hitting either still has to ride through it. Adding a `min_dte_to_close` parameter (e.g., default 7) is the conventional fix and matches the *Gamma risk* warning in the glossary. Effect on results is probably small on bullish underlyings like MSFT (the delta-0.70 trigger already catches most of these positions early) but would be more visible on volatile or sideways tickers where positions can sit near-ATM into the final week without becoming deep ITM.
-10. **Entry trend filter:** Add a parameterized SMA trend filter (gate entries on SMA50 vs. SMA200) as an on/off axis in the walk-forward grid. Today the engine ships no trend filter by design. The CC-phase argument (selling into downtrends is desirable for call sellers — premium collected, cost basis reduced) predicts it won't help on the call side, but that prediction is currently untested. Making it a searched parameter would turn the design choice into an empirical result.
-
-The Israelov & Nielsen (2015) risk-managed covered call used to live here as item 9; it's now built and measured in [Part 5's risk-managed subsection](#risk-managed-covered-calls-stripping-out-the-equity-timing-wiggle) — set `delta_hedge: True` in `params` to run it.
-
 ### Check Your Understanding
 
 The integrative one — these pull threads from every Part. Answer from memory before revealing.
@@ -1486,6 +1460,32 @@ Is there an open position?
        ├─ Apply 3% slippage + $0.65 commission
        └─ SELL CALL (if net premium > 1% of stock price)
 ```
+
+### The Limitations We Haven't Solved
+
+1. **IV proxy (regime-based HV multiplier):** Even with regime switching (1.1×/1.3×/1.5×), this is a rough approximation. Real IV can spike 50%+ on bad news, especially around earnings.
+2. **No gap risk:** We assume you can always close at model prices. Reality: market gaps at open, especially on earnings.
+3. **No dividend handling:** MSFT pays dividends; our model ignores them (small effect, but nonzero).
+4. **No earnings avoidance:** Selling calls into earnings is dangerous (IV crush, whipsaws). We should avoid this.
+5. **No rolling:** We modeled buying back and selling new as separate events, but real traders often "roll" — a single combined order that closes the old call and opens a new one simultaneously, often for a net credit. Example: your old call costs $0.50 to buy back, the new call sells for $2.00 → rolling combines them into one order for a $1.50 net credit, with one fill instead of two and often better pricing since brokers optimize combo orders. Our backtest treats these as independent transactions, so real performance could be slightly better due to reduced slippage.
+6. **Commission simplification:** We assumed $0.65 per contract. Real costs vary by broker.
+
+### What We'd Add Next
+
+**To make this production-ready:**
+
+1. **Actual option prices:** Use OptionMetrics or similar to get real IV and prices.
+2. **Earnings calendar:** Avoid selling calls in the week before earnings.
+3. **VIX regime switching:** Adjust delta based on VIX level (high VIX → be more defensive, sell lower deltas further OTM — you still collect decent premium because high IV inflates prices even at lower deltas, and the extra buffer protects against the larger price swings that high-vol environments produce).
+4. **Rolling logic:** Model rolling ITM calls for credits, not just buying back.
+5. **Portfolio optimization:** Test on 10–20 stocks, optimize correlation effects.
+6. **Slippage modeling:** Account for bid-ask widening on high-volatility days.
+7. **Strategy-vs-cash significance test:** Add a second mode to `compute_statistics` that uses the risk-free rate as the benchmark instead of buy-and-hold — i.e., test the mean of *daily* excess returns `r_strategy,t − rf_t` against zero with the same Newey-West machinery, instead of `overlay_ret − bh_ret`. This is the comparison the academic VRP literature reports (BXM/PUT papers test strategy returns against cash, not against the underlying), and it's the right way to put our backtest on equal footing with their published t-stats. Same null structure as today's test, different benchmark series.
+8. **Index ETF test:** Run the same strategy on SPY or QQQ. Single-stock VRP is structurally weaker than index VRP because index options have richer insurance demand. If the t-stat moves substantially toward the academic range when we switch underlyings, that confirms the gap was about *what* we backtested, not *how* we backtested.
+9. **7-DTE close rule:** Close any open position when fewer than 7 days remain to expiration, regardless of profit target or delta. The current engine triggers on expiration itself, profit-target, or deep ITM (`delta > 0.70`) — so a position that drifts into the gamma-heavy final week without hitting either still has to ride through it. Adding a `min_dte_to_close` parameter (e.g., default 7) is the conventional fix and matches the *Gamma risk* warning in the glossary. Effect on results is probably small on bullish underlyings like MSFT (the delta-0.70 trigger already catches most of these positions early) but would be more visible on volatile or sideways tickers where positions can sit near-ATM into the final week without becoming deep ITM.
+10. **Entry trend filter:** Add a parameterized SMA trend filter (gate entries on SMA50 vs. SMA200) as an on/off axis in the walk-forward grid. Today the engine ships no trend filter by design. The CC-phase argument (selling into downtrends is desirable for call sellers — premium collected, cost basis reduced) predicts it won't help on the call side, but that prediction is currently untested. Making it a searched parameter would turn the design choice into an empirical result.
+
+The Israelov & Nielsen (2015) risk-managed covered call used to live here as item 9; it's now built and measured in [Part 5's risk-managed subsection](#risk-managed-covered-calls-stripping-out-the-equity-timing-wiggle) — set `delta_hedge: True` in `params` to run it.
 
 ### Resources for Further Learning
 
@@ -1566,7 +1566,7 @@ Reference glossary for terms used throughout the tutorial. Most are also defined
 - **Drawdown:** The decline from a recent peak to a subsequent trough. *Max drawdown* is the worst peak-to-trough loss in the sample — a common measure of downside risk. A strategy returning 20% annualized with 5% max drawdown is safer than one returning 25% with 40% max drawdown, even though the first has lower expected return.
 - **DTE (Days to Expiration):** How many calendar days until the option expires. We use 21 DTE (about 3 weeks) as our default.
 - **Excess Return:** The strategy's return *minus* the benchmark's return on the same day. For a covered call overlay, the relevant excess return is the overlay's daily return minus buy-and-hold's daily return on the same shares. Subtracting the benchmark cancels out the stock's own movement, leaving only the value the overlay adds (or destroys). When testing whether a strategy "works," you almost always want to test excess returns, not raw returns — otherwise you're mostly measuring the underlying market.
-- **Gamma risk:** The risk that your option's delta changes rapidly as the stock moves. Near expiration, small stock moves can cause big swings in an option's value — a "safe" out-of-the-money call can suddenly become in-the-money. The conventional fix is to close positions before the last week of expiration (the "7-DTE close" rule). The current engine handles this indirectly through its `delta > 0.70` close trigger, which tends to fire more readily near expiration as gamma steepens; an explicit DTE-based threshold is listed in "What We'd Add Next" in Part 6.
+- **Gamma risk:** The risk that your option's delta changes rapidly as the stock moves. Near expiration, small stock moves can cause big swings in an option's value — a "safe" out-of-the-money call can suddenly become in-the-money. The conventional fix is to close positions before the last week of expiration (the "7-DTE close" rule). The current engine handles this indirectly through its `delta > 0.70` close trigger, which tends to fire more readily near expiration as gamma steepens; an explicit DTE-based threshold is listed in "What We'd Add Next" in Part 7.
 - **HV (Historical Volatility):** How much the stock price has actually been bouncing around, measured from past prices.
 - **IID (Independent and Identically Distributed):** Two assumptions baked into most introductory statistics formulas. *Independent* means each observation tells you nothing about any others (like fair coin flips). *Identically distributed* means every observation comes from the same probability distribution (same bag of marbles each draw). Financial returns rarely satisfy either — they cluster in volatility regimes (not identical) and they autocorrelate through position holding (not independent). Naive t-stat formulas assume IID and inflate when it's violated.
 - **ITM (In the Money):** The opposite of OTM. A call option is ITM when the strike is *below* the current stock price (the buyer would exercise immediately to capture the difference); a put is ITM when the strike is *above* the current stock price. As a covered-call seller you *don't* want your short calls to end up ITM at expiration — that's the assignment loss scenario, where you lose all the upside above the strike. An option's delta is roughly the probability it expires ITM.
