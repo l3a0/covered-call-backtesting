@@ -1,12 +1,12 @@
-# I Built a Backtest That "Made" \$268,000. Then I Proved It Was Luck
+# I Built a Backtest That "Made" $268,000. Then I Proved It Was Luck
 
 *The first skill in quantitative investing isn't finding an edge. It's learning to distrust the one you think you found.*
 
-I ran a simulation last month that turned \$100,000 into roughly \$1.01 million. Same starting cash, same stock, same ten years — but instead of just buying Microsoft and holding it, I layered a simple options strategy on top, and that overlay alone added **\$268,000** beyond what holding the stock would have made. An 81% win rate across 181 trades. On paper, it looks like a money printer.
+I ran a simulation last month that turned <span>$</span>100,000 into roughly <span>$</span>1.01 million. Same starting cash, same stock, same ten years — but instead of just buying Microsoft and holding it, I layered a simple options strategy on top, and that overlay alone added **<span>$</span>268,000** beyond what holding the stock would have made. An 81% win rate across 181 trades. On paper, it looks like a money printer.
 
 It wasn't. And the most useful thing I did all month was figure out exactly how I knew that.
 
-![Two portfolio-value curves over 2016–2026 on a \$100K start. The covered-call overlay line ends near \$1.01M, slightly above the buy-and-hold Microsoft line; both rise together for most of the decade, with the overlay pulling modestly ahead.](../docs/figures/01_equity_curves.png)
+![Two portfolio-value curves over 2016–2026 on a $100K start. The covered-call overlay line ends near $1.01M, slightly above the buy-and-hold Microsoft line; both rise together for most of the decade, with the overlay pulling modestly ahead.](../docs/figures/01_equity_curves.png)
 
 *The seduction. This is the chart that sells the strategy: ten years, a real stock, and a line that ends a quarter-million dollars above just holding it. Hold this image in your head — the last post shows you the exact same chart and it means the opposite.*
 
@@ -40,15 +40,15 @@ I engineered the first one out — every decision uses only past data. The secon
 
 ## The number that didn't fit
 
-My backtest cleared the obvious traps. It made every decision using only past data. And it still reported that \$268,000 of added profit, with an 81% win rate, over a full decade.
+My backtest cleared the obvious traps. It made every decision using only past data. And it still reported that $268,000 of added profit, with an 81% win rate, over a full decade.
 
 Then I looked at one more line of output — a statistic that asks a different question than "how much did it make?" It asks: *if the overlay added no real value, how often would pure chance hand you a result at least this good over a sample this size?* There's a standard number for that. Above roughly 2, you can argue the result is unlikely to be luck. My backtest came back at **0.46.** In plain odds: if the overlay added nothing, pure chance would still have handed me a result this good or better about two times in three.
 
-Both of these things are true at the same time. The strategy made real money in the simulation, and the evidence that the overlay itself — as opposed to simply owning a stock that went up 646% — added anything is statistically indistinguishable from noise. Microsoft did the heavy lifting. The \$268,000 sitting on top of it is the part under suspicion, and the suspicion holds.
+Both of these things are true at the same time. The strategy made real money in the simulation, and the evidence that the overlay itself — as opposed to simply owning a stock that went up 646% — added anything is statistically indistinguishable from noise. Microsoft did the heavy lifting. The $268,000 sitting on top of it is the part under suspicion, and the suspicion holds.
 
-It helps to see where that \$268,000 even comes from. The strategy collected nearly a million dollars in option premium over the decade — but almost three-quarters of it went right back out the door buying calls back and capping upside on the trades that got assigned.
+It helps to see where that $268,000 even comes from. The strategy collected nearly a million dollars in option premium over the decade — but almost three-quarters of it went right back out the door buying calls back and capping upside on the trades that got assigned.
 
-![A waterfall chart with three bars. The first, gross premium collected, stands at about \$999K. The second drops by roughly \$730K for buybacks and assignment costs. The third, net overlay P&L, lands at about \$268K — only about 27% of the gross.](../docs/figures/12_premium_waterfall.png)
+![A waterfall chart with three bars. The first, gross premium collected, stands at about $999K. The second drops by roughly $730K for buybacks and assignment costs. The third, net overlay P&L, lands at about $268K — only about 27% of the gross.](../docs/figures/12_premium_waterfall.png)
 
 *The income number that gets quoted in pitches is the first bar. The number you actually keep is the third. The gap between them is the part nobody puts on the slide.*
 

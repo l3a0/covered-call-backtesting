@@ -6,7 +6,7 @@ Suppose I asked you to price one year of car insurance for a 25-year-old. You do
 
 That is the entire idea behind the most famous equation in finance.
 
-Last post I showed a backtest that "made" \$268,000 layering covered calls on Microsoft, and then a statistic suggesting the edge was indistinguishable from luck. Before we can judge whether that profit was real, we have to open the engine and look at where its option prices came from — because the backtest never bought a single real option. It calculated them. This is the part of the machine where optimism gets in.
+Last post I showed a backtest that "made" $268,000 layering covered calls on Microsoft, and then a statistic suggesting the edge was indistinguishable from luck. Before we can judge whether that profit was real, we have to open the engine and look at where its option prices came from — because the backtest never bought a single real option. It calculated them. This is the part of the machine where optimism gets in.
 
 ## The five ingredients
 
@@ -76,4 +76,4 @@ Black-Scholes earns the "recipe" label honestly: give it good ingredients and it
 
 [^1]: "Roughly" is doing real work. Delta and the probability of finishing in-the-money are closely related but not identical quantities; for setting a covered-call strike, the difference is small enough to ignore and the intuition is what matters. The tutorial in the repo walks through the precise version for anyone who wants it.
 
-[^2]: Budget vendors list full multi-year U.S. option histories for roughly \$69–\$245 ([discountoptiondata.com](https://www.discountoptiondata.com/)). Research-grade vendors price a basic full history around \$1,150 and a cleaned implied-volatility-surface set around \$10,600 ([historicaloptiondata.com](https://historicaloptiondata.com/shop/)). [OptionMetrics / IvyDB](https://optionmetrics.com/), the dataset most academic options research runs on, doesn't publish prices — it's licensed through institutional subscriptions like [WRDS](https://wrds-www.wharton.upenn.edu/pages/about/data-vendors/optionmetrics/). Figures current as of May 2026.
+[^2]: Budget vendors list full multi-year U.S. option histories for roughly <span>$</span>69–<span>$</span>245 ([discountoptiondata.com](https://www.discountoptiondata.com/)). Research-grade vendors price a basic full history around <span>$</span>1,150 and a cleaned implied-volatility-surface set around <span>$</span>10,600 ([historicaloptiondata.com](https://historicaloptiondata.com/shop/)). [OptionMetrics / IvyDB](https://optionmetrics.com/), the dataset most academic options research runs on, doesn't publish prices — it's licensed through institutional subscriptions like [WRDS](https://wrds-www.wharton.upenn.edu/pages/about/data-vendors/optionmetrics/). Figures current as of May 2026.
