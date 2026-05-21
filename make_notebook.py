@@ -55,6 +55,13 @@ IMAGE_RE = re.compile(r"^!\[.*\]\((?:\./)?docs/figures/([0-9A-Za-z_]+\.png)\)\s*
 # Not H1 (the single doc title) and not H5+ (none exist).
 HEADING_RE = re.compile(r"#{2,4} ")
 
+# Spans where a literal $ must be left alone when escaping currency dollars
+# (see escape_notebook_dollars): single-backtick inline code and $$...$$
+# display math. Matched left-to-right so the prose *between* two code spans
+# (e.g. the cost paragraph's "$0.65/contract ... $0.0065/share") is treated
+# as prose, not as one span.
+_DOLLAR_SAFE_RE = re.compile(r"`[^`\n]*`|\$\$[^$\n]*\$\$")
+
 # Some tutorial sections *link* to code in cc_backtest.py instead of inlining
 # it (the repo's "linked, test-pinned implementations" convention), so the
 # converter sees no fenced block to turn into a runnable cell. For those, map
@@ -415,6 +422,47 @@ def code_cell(text: str) -> dict:
     }
 
 
+def escape_notebook_dollars(text: str) -> str:
+    """Escape literal currency dollars as ``\\$`` for the notebook only.
+
+    The tutorial keeps dollars bare — correct on GitHub's ``.md`` renderer
+    (it only typesets math it tags server-side and never tags dollar prose)
+    and on Substack. But GitHub renders ``.ipynb`` with a naive MathJax pass
+    that pairs *any* two ``$`` on a line, so bare prose like "$50 ... $52"
+    would typeset as math. A ``\\$`` in the cell source survives markdown
+    processing as a literal backslash-dollar, which MathJax's processEscapes
+    renders as a plain ``$`` — the one form confirmed to work in GitHub's
+    notebook viewer.
+
+    Left untouched, because there a ``$`` is already safe and a backslash
+    would show literally: fenced code blocks, single-backtick inline code,
+    and ``$$...$$`` display math (the SE formula in Part 5).
+    """
+    out: list[str] = []
+    in_fence = False
+    for line in text.split("\n"):
+        if line.lstrip().startswith("```"):
+            in_fence = not in_fence
+            out.append(line)
+        elif in_fence:
+            out.append(line)
+        else:
+            out.append(_escape_inline_dollars(line))
+    return "\n".join(out)
+
+
+def _escape_inline_dollars(line: str) -> str:
+    """Escape ``$`` -> ``\\$`` outside inline code and ``$$`` display math."""
+    parts: list[str] = []
+    pos = 0
+    for m in _DOLLAR_SAFE_RE.finditer(line):
+        parts.append(line[pos:m.start()].replace("$", "\\\\$"))
+        parts.append(m.group(0))  # code span / display math — left as-is
+        pos = m.end()
+    parts.append(line[pos:].replace("$", "\\\\$"))
+    return "".join(parts)
+
+
 def build_cells(md: str) -> list[dict]:
     lines = md.split("\n")
     cells: list[dict] = [md_cell(INTRO_MD), code_cell(SETUP_CODE),
@@ -425,7 +473,7 @@ def build_cells(md: str) -> list[dict]:
     def flush() -> None:
         text = "\n".join(buf).strip("\n")
         if text.strip():
-            cells.append(md_cell(text))
+            cells.append(md_cell(escape_notebook_dollars(text)))
         buf.clear()
 
     i = 0

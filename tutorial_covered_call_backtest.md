@@ -48,16 +48,16 @@ Imagine you own a house worth $300,000. You could:
 2. **Rent it out** — get monthly income while keeping the house
 3. **Sell homeowner's insurance to your neighbors** — collect premiums if nothing bad happens
 
-A covered call is like option #2 and #3 combined. You own the stock (like owning a house). You sell call options (like selling insurance: "I'll let you buy my stock at <span>$</span>50 anytime in the next 30 days, and you pay me <span>$</span>2 for that right"). If the stock goes up, sometimes your buyer exercises the option and buys your shares (you "lose" them, but at a fixed price). If it stays flat or goes down, the buyer doesn't exercise, and you keep both the stock AND the premium (<span>$</span>2).
+A covered call is like option #2 and #3 combined. You own the stock (like owning a house). You sell call options (like selling insurance: "I'll let you buy my stock at $50 anytime in the next 30 days, and you pay me $2 for that right"). If the stock goes up, sometimes your buyer exercises the option and buys your shares (you "lose" them, but at a fixed price). If it stays flat or goes down, the buyer doesn't exercise, and you keep both the stock AND the premium ($2).
 
 > **Key insight:** You're not trying to hit a home run. You're trying to collect small, frequent premiums while the stock does its normal thing.
 
-**Predict first.** You own shares bought at <span>$</span>50. You sell a 30-day call struck at <span>$</span>55 and collect a <span>$</span>2 premium. Over the next month the stock rockets to <span>$</span>65. Did the covered call make money or lose money — and how does your result compare to someone who just held the shares and sold nothing?
+**Predict first.** You own shares bought at $50. You sell a 30-day call struck at $55 and collect a $2 premium. Over the next month the stock rockets to $65. Did the covered call make money or lose money — and how does your result compare to someone who just held the shares and sold nothing?
 
 <details>
 <summary>Reveal</summary>
 
-**You made <span>$</span>7 a share — and left <span>$</span>8 on the table.** You keep the <span>$</span>2 premium plus the <span>$</span>5 of appreciation from <span>$</span>50 up to the <span>$</span>55 strike: <span>$</span>7 total. But the buyer exercises and takes the shares at <span>$</span>55, so the entire run from <span>$</span>55 to <span>$</span>65 is theirs — <span>$</span>10 of rally you forfeit, only partly cushioned by the <span>$</span>2 premium. Buy-and-hold captured the full <span>$</span>15 move (<span>$</span>50 → <span>$</span>65). Both outcomes are positive; the covered call is simply the *smaller* one in a strong rally. That <span>$</span>8 gap is **capped upside**, the price you pay for the premium income, and it's exactly why every later Part measures the overlay against buy-and-hold rather than against cash.
+**You made $7 a share — and left $8 on the table.** You keep the $2 premium plus the $5 of appreciation from $50 up to the $55 strike: $7 total. But the buyer exercises and takes the shares at $55, so the entire run from $55 to $65 is theirs — $10 of rally you forfeit, only partly cushioned by the $2 premium. Buy-and-hold captured the full $15 move ($50 → $65). Both outcomes are positive; the covered call is simply the *smaller* one in a strong rally. That $8 gap is **capped upside**, the price you pay for the premium income, and it's exactly why every later Part measures the overlay against buy-and-hold rather than against cash.
 
 </details>
 
@@ -163,7 +163,7 @@ But here's what's *actually* happening:
 d₁ = [ln(S/K) + (r + σ²/2)·T] / (σ·√T)
 ```
 
-Translation: "If the stock is at <span>$</span>50 and the strike is <span>$</span>52, how many standard deviations away is that? And how much time do we have?"
+Translation: "If the stock is at $50 and the strike is $52, how many standard deviations away is that? And how much time do we have?"
 
 A high σ (volatility) makes the denominator huge, so d₁ stays closer to zero. This means the market expects big moves, so the option is worth more.
 
@@ -307,8 +307,8 @@ The production implementation is [`cc_backtest.py::find_strike_for_delta`](https
 **Example run:**
 
 - Stock at $100, want 0.25Δ, 30 days out, σ=20%
-- Grid search checks every whole-dollar strike from <span>$</span>98 to <span>$</span>125
-- <span>$</span>105 has delta ≈ 0.28, **<span>$</span>106** has delta ≈ 0.23 — <span>$</span>106 is closest to 0.25
+- Grid search checks every whole-dollar strike from $98 to $125
+- $105 has delta ≈ 0.28, **$106** has delta ≈ 0.23 — $106 is closest to 0.25
 - Returns strike = $106, delta = 0.23
 
 ### Code Walkthrough: bs_price(), bs_delta(), find_strike_for_delta()
@@ -438,13 +438,13 @@ Answer from memory before revealing — if one doesn't come, that section is wor
 
 ### The Core Rule: "Never Sell Your Shares"
 
-This is the invariant the rest of the engine is built around. It's what makes this an income *overlay* — premium collected on top of a share position you would hold anyway — rather than a directional bet on the stock: [`run_cc_overlay`](https://github.com/l3a0/covered-call-backtesting/blob/main/cc_backtest.py#L201) never liquidates the underlying; only the short call cycles (sell → bought back, expires, or assigns → sell again). Why it earns its place rather than just sounding sensible: holding through every regime instead of timing exits is exactly what produces the defensive return profile measured in [Part 5's regime analysis](#regime-analysis-does-it-work-in-bulls-bears-and-sideways) — the overlay's per-day edge there is roughly 10× larger in bear and sideways markets (\~<span>$</span>23/day bull vs. \~<span>$</span>303 / \~<span>$</span>402) precisely *because* it keeps selling against the same shares no matter the trend. Abandon the rule and you forfeit that profile.
+This is the invariant the rest of the engine is built around. It's what makes this an income *overlay* — premium collected on top of a share position you would hold anyway — rather than a directional bet on the stock: [`run_cc_overlay`](https://github.com/l3a0/covered-call-backtesting/blob/main/cc_backtest.py#L201) never liquidates the underlying; only the short call cycles (sell → bought back, expires, or assigns → sell again). Why it earns its place rather than just sounding sensible: holding through every regime instead of timing exits is exactly what produces the defensive return profile measured in [Part 5's regime analysis](#regime-analysis-does-it-work-in-bulls-bears-and-sideways) — the overlay's per-day edge there is roughly 10× larger in bear and sideways markets (\~$23/day bull vs. \~$303 / \~$402) precisely *because* it keeps selling against the same shares no matter the trend. Abandon the rule and you forfeit that profile.
 
 **Mistake:** Selling a 0.60Δ call, hoping the stock goes down, so you keep the premium AND the shares. If it rises above the strike, the shares get called away at a loss.
 
 **Right approach:** Sell a 0.25Δ call. You *expect* the shares to get called away 25% of the time. That's fine — it's built into the premium you collect. You own the upside up to the strike, then the shares leave. You're okay with this.
 
-> **Analogy:** You own a rental property worth <span>$</span>300k. You lease it for <span>$</span>2k/month, expecting a 10% chance per year the lease breaks early. The early-break risk is built into your rental decision. You don't twist the terms hoping the tenant never leaves — that's not the business you're in.
+> **Analogy:** You own a rental property worth $300k. You lease it for $2k/month, expecting a 10% chance per year the lease breaks early. The early-break risk is built into your rental decision. You don't twist the terms hoping the tenant never leaves — that's not the business you're in.
 
 In a covered call overlay, you're in the **income business**, not the **capital appreciation business**.
 
@@ -461,13 +461,13 @@ Let's simulate a realistic week:
   - Target delta = 0.25 (25% chance of ITM)
   - Strike = $53 (found via grid search — closest whole-dollar strike to 0.25Δ)
   - Premium = $0.64
-  - Net credit = <span>$</span>0.64 × 100 = <span>$</span>64, minus <span>$</span>0.65 commission = **<span>$</span>63.35**
+  - Net credit = $0.64 × 100 = $64, minus $0.65 commission = **$63.35**
 - **State:** OPEN (call is active)
 
 **Tuesday, Jan 7:**
 
 - ABC closes at $51
-- Call is still OTM (<span>$</span>51 < <span>$</span>53 strike), delta ≈ 0.30
+- Call is still OTM ($51 < $53 strike), delta ≈ 0.30
 - Option has decayed slightly — time decay is working in our favor
 - Check profit target: not yet at 75% of premium captured
 - **Decision:** Hold (not at target yet)
@@ -489,7 +489,7 @@ When you sell a call:
 If we want a "75% return on the premium," we close when the option has lost 75% of its value:
 
 - Collected: $64
-- Close when option worth: <span>$</span>64 × 0.25 = <span>$</span>16 (we keep 75%, buy back for 25%)
+- Close when option worth: $64 × 0.25 = $16 (we keep 75%, buy back for 25%)
 - If option is still worth $50, we haven't hit our target yet
 - **Decision:** Hold, waiting for more decay
 
@@ -511,8 +511,8 @@ If we want a "75% return on the premium," we close when the option has lost 75% 
 
 - ABC is at $50
 - Call is now OTM (delta ≈ 0.10) and worth \~$0.10
-- We sold at <span>$</span>0.64; if we buy back now, we pay <span>$</span>0.10
-- Profit: <span>$</span>0.64 - <span>$</span>0.10 = <span>$</span>0.54 = **84% return on the premium**
+- We sold at $0.64; if we buy back now, we pay $0.10
+- Profit: $0.64 - $0.10 = $0.54 = **84% return on the premium**
 - That exceeds our 75% target — time to close
 - **Decision:** Close the position, lock in 84% profit, reset for next month
 
@@ -549,18 +549,18 @@ This is where backtests often lie.
 
 **Reality:**
 
-- You pay <span>$</span>0.65 per contract to open (a contract covers 100 shares, so <span>$</span>0.65 per contract = <span>$</span>0.0065 per share)
+- You pay $0.65 per contract to open (a contract covers 100 shares, so $0.65 per contract = $0.0065 per share)
 - You pay $0.65 per contract to close
 - You have slippage: the bid-ask spread might mean you sell the call for 95¢ but it's worth $1.00
 
-The engine doesn't wrap this in a helper — it's one line inside [`cc_backtest.py::run_cc_overlay`](https://github.com/l3a0/covered-call-backtesting/blob/main/cc_backtest.py#L335): `net_premium = premium * (1 - 0.03) - 0.0065` on the sell side (3% slippage; <span>$</span>0.65/contract commission = <span>$</span>0.0065/share), with a matching `- 0.65 * num_contracts` charged when the call is bought back to close. If costs would exceed the credit — a near-worthless deep-OTM call — it skips the trade rather than open at a loss.
+The engine doesn't wrap this in a helper — it's one line inside [`cc_backtest.py::run_cc_overlay`](https://github.com/l3a0/covered-call-backtesting/blob/main/cc_backtest.py#L335): `net_premium = premium * (1 - 0.03) - 0.0065` on the sell side (3% slippage; $0.65/contract commission = $0.0065/share), with a matching `- 0.65 * num_contracts` charged when the call is bought back to close. If costs would exceed the credit — a near-worthless deep-OTM call — it skips the trade rather than open at a loss.
 
 **Example:**
 
 - Black-Scholes says the call is worth $1.00
 - Slippage (3%): lose $0.03
-- Commission on open (0.65 per contract = <span>$</span>0.0065 per share): lose <span>$</span>0.0065
-- **Net credit:** <span>$</span>1.00 - <span>$</span>0.03 - <span>$</span>0.0065 = **<span>$</span>0.9635**
+- Commission on open (0.65 per contract = $0.0065 per share): lose $0.0065
+- **Net credit:** $1.00 - $0.03 - $0.0065 = **$0.9635**
 
 Over a year with 12 calls sold, transaction costs can eat 5–10% of returns.
 
@@ -982,10 +982,10 @@ The implementations are [`cc_backtest.py::classify_regime`](https://github.com/l
 
 | Regime | Days | Total P&L | Avg P&L/day |
 | --- | ---: | ---: | ---: |
-| Bull | 1,690 | <span>$</span>38,917 | <span>$</span>23.03 |
-| Bear | 279 | <span>$</span>84,616 | <span>$</span>303.28 |
-| Sideways | 346 | <span>$</span>139,032 | <span>$</span>401.83 |
-| Unknown (first 200 days) | 200 | <span>$</span>7,916 | <span>$</span>39.58 |
+| Bull | 1,690 | $38,917 | $23.03 |
+| Bear | 279 | $84,616 | $303.28 |
+| Sideways | 346 | $139,032 | $401.83 |
+| Unknown (first 200 days) | 200 | $7,916 | $39.58 |
 
 **Interpretation:** Bear and sideways regimes produce **roughly 10× the per-day premium** of bull regimes, even though bull days dominate the day count (1,690 out of 2,515). Two things drive this: (1) volatility is higher in non-bull regimes, so option premium per trade is richer; (2) more positions hit their profit target or assignment threshold when the stock isn't grinding steadily upward. The strategy is structurally defensive — it earns most of its keep when the market is anything other than a one-way bull. That's the point of selling vol.
 
@@ -1000,7 +1000,7 @@ The implementations are [`cc_backtest.py::classify_regime`](https://github.com/l
 <details>
 <summary>Reveal</summary>
 
-**No — that's precisely the window where a call-selling overlay is *supposed* to look worst.** A one-way bull is exactly when capped upside hurts most, so testing only there both flatters buy-and-hold and hides the overlay's real job. Look back at the regime table: the per-day edge is roughly 10× larger in bear and sideways markets (\~<span>$</span>23/day in bull vs. \~<span>$</span>303 bear / \~<span>$</span>402 sideways). The defect isn't the strategy, it's the *sample* — judging a defensive overlay on bull-only data answers a question you didn't mean to ask.
+**No — that's precisely the window where a call-selling overlay is *supposed* to look worst.** A one-way bull is exactly when capped upside hurts most, so testing only there both flatters buy-and-hold and hides the overlay's real job. Look back at the regime table: the per-day edge is roughly 10× larger in bear and sideways markets (\~$23/day in bull vs. \~$303 bear / \~$402 sideways). The defect isn't the strategy, it's the *sample* — judging a defensive overlay on bull-only data answers a question you didn't mean to ask.
 
 </details>
 
@@ -1274,7 +1274,7 @@ The general lesson is one we'll keep meeting in backtesting: **the way you const
 
 #### Common Mistake: Treating Dollar P&L as Evidence of Edge
 
-A backtest that shows "+<span>$</span>268K excess profit" sounds like a win. It is also perfectly consistent with the strategy adding zero value — just lucky enough to land on the positive side of the noise distribution given a single 10-year sample. Without a t-statistic, you can't distinguish a real <span>$</span>268K edge from a zero-edge strategy that happened to flip 10 lucky coins in a row.
+A backtest that shows "+$268K excess profit" sounds like a win. It is also perfectly consistent with the strategy adding zero value — just lucky enough to land on the positive side of the noise distribution given a single 10-year sample. Without a t-statistic, you can't distinguish a real $268K edge from a zero-edge strategy that happened to flip 10 lucky coins in a row.
 
 Always report the t-stat. Always compute it with Newey-West if you have any time-series data. And always benchmark against the question you actually care about (overlay vs. buy-and-hold *or* strategy vs. cash) — they answer different questions and produce different t-stats.
 
@@ -1312,7 +1312,7 @@ Answer from memory before revealing — if one doesn't come, that section is wor
 
 1. **Independence fails** — one 21-DTE option drives P&L for up to 21 days, so consecutive overlay returns share a driver (autocorrelation). **Identically-distributed fails** — `detect_regime` itself says returns come from different vol regimes (heteroskedasticity). Both bias the naive standard error; **Newey–West (HAC)** corrects for exactly autocorrelation + heteroskedasticity. *In this backtest* the correction nudges naive `0.40` *up* to NW `0.46` — short-lag autocorrelation here is net *negative* (mean-reverting), the opposite sign from the more common positive-autocorrelation case where NW would *shrink* the t. Either way, NW is the one to report.
 2. It preserves the daily-return **set** (same mean, vol, distribution) and destroys their **order** (trends, clusters, sequence). Beating the shuffles proves the overlay harvests a *distributional* property (volatility), not a lucky sequence. It does **not** prove the overlay beats buy-and-hold — the shuffle mean (\~657%) is itself enormous because that's mostly the *stock*; that's why significance is tested on *excess* returns, not raw return.
-3. Bull days dominate the count (1,690 of 2,515), so they sum to the biggest dollar total — but the per-day edge is \~10× higher in bear/sideways (\~<span>$</span>23 vs. \~<span>$</span>303 / \~<span>$</span>402 a day). The *per-day* number, not the dollar total, shows the overlay earns its keep when the market is anything but a one-way bull.
+3. Bull days dominate the count (1,690 of 2,515), so they sum to the biggest dollar total — but the per-day edge is \~10× higher in bear/sideways (\~$23 vs. \~$303 / \~$402 a day). The *per-day* number, not the dollar total, shows the overlay earns its keep when the market is anything but a one-way bull.
 4. No — same result two ways. ~+$268K is large in dollars but within what noise produces over this sample: a Newey–West t ≈ 0.46 is p ≈ 0.65, i.e. chance beats it about two times in three. Big P&L is not a statistical edge; always read the t-stat on excess returns alongside the dollar figure.
 
 </details>
@@ -1385,7 +1385,7 @@ Here's the complete process:
 
 ![Overlay vs. buy-and-hold equity curves on MSFT 2016–2026, showing the overlay ending at approximately $1,015K and buy-and-hold ending at approximately $746K. Both curves grow substantially; the overlay's lead is small early on and widens noticeably from 2019 onward, ending with a $268K gap.](docs/figures/01_equity_curves.png)
 
-*Overlay vs. buy-and-hold equity on the bundled MSFT data. The overlay finishes about <span>$</span>268K ahead. The gap is small through 2018, then widens through the 2019–2024 stretch and stays near <span>$</span>200–300K through the recent vol-heavy period — accumulating in the volatile middle years rather than in any single regime.*
+*Overlay vs. buy-and-hold equity on the bundled MSFT data. The overlay finishes about $268K ahead. The gap is small through 2018, then widens through the 2019–2024 stretch and stays near $200–300K through the recent vol-heavy period — accumulating in the volatile middle years rather than in any single regime.*
 
 - ✅ Fixed params: \~915% total return on the bundled `$100K` configuration (final equity \~$1,015K; see Figure 1)
 - ✅ Monte Carlo: percentile 100 (real ordered path beats every one of 500 shuffled paths; max shuffled return \~870%)
@@ -1465,7 +1465,7 @@ Is there an open position?
 2. **No gap risk:** We assume you can always close at model prices. Reality: market gaps at open, especially on earnings.
 3. **No dividend handling:** MSFT pays dividends; our model ignores them (small effect, but nonzero).
 4. **No earnings avoidance:** Selling calls into earnings is dangerous (IV crush, whipsaws). We should avoid this.
-5. **No rolling:** We modeled buying back and selling new as separate events, but real traders often "roll" — a single combined order that closes the old call and opens a new one simultaneously, often for a net credit. Example: your old call costs <span>$</span>0.50 to buy back, the new call sells for <span>$</span>2.00 → rolling combines them into one order for a <span>$</span>1.50 net credit, with one fill instead of two and often better pricing since brokers optimize combo orders. Our backtest treats these as independent transactions, so real performance could be slightly better due to reduced slippage.
+5. **No rolling:** We modeled buying back and selling new as separate events, but real traders often "roll" — a single combined order that closes the old call and opens a new one simultaneously, often for a net credit. Example: your old call costs $0.50 to buy back, the new call sells for $2.00 → rolling combines them into one order for a $1.50 net credit, with one fill instead of two and often better pricing since brokers optimize combo orders. Our backtest treats these as independent transactions, so real performance could be slightly better due to reduced slippage.
 6. **Commission simplification:** We assumed $0.65 per contract. Real costs vary by broker.
 
 ### What We'd Add Next
@@ -1553,7 +1553,7 @@ pytest                           # runs the test suite
 Reference glossary for terms used throughout the tutorial. Most are also defined inline where they first appear; this is the place to come back to when you need a refresher.
 
 - **AR(1) (autoregressive, order 1):** The simplest model of a time series that has memory. Each value depends linearly on the previous one plus a fresh random shock: `y_t = φ · y_{t-1} + ε_t`. The single coefficient `φ` (phi) controls how much: `φ = 0` is white noise (no memory — IID coin flips), `φ > 0` is positive autocorrelation (today inherits from yesterday — momentum), `φ < 0` is mean reversion (today fades yesterday). AR(1) is the standard testbed for time-series methods because its long-run variance has a clean closed form (`1 / (1 − φ)²` for unit-variance innovations), so you can measure how well an estimator like Newey-West tracks the truth. Figure 3 in Part 5 uses 2,000 AR(1) paths with `φ = 0.3` to demonstrate the bias-variance tradeoff for the NW lag cutoff.
-- **Assignment loss:** What happens when your covered call gets exercised because the stock rallied past the strike. You collected premium up front, but to keep running the overlay you must rebuy the shares at the current (higher) market price. The overlay's net is `premium − (market_price − strike)`. It's a **loss** when the stock rallied past `strike + premium`. Example: you sold a <span>$</span>310 strike call for <span>$</span>1.50 premium and the stock closed at <span>$</span>325 — you keep the <span>$</span>1.50 but pay back <span>$</span>15 of capped upside, netting **−<span>$</span>13.50/share**. The stock appreciation up to the strike is still yours (tracked separately as part of equity), but the *uncapped* portion of the rally is gone. In a strong bull market this is the dominant cost the overlay pays.
+- **Assignment loss:** What happens when your covered call gets exercised because the stock rallied past the strike. You collected premium up front, but to keep running the overlay you must rebuy the shares at the current (higher) market price. The overlay's net is `premium − (market_price − strike)`. It's a **loss** when the stock rallied past `strike + premium`. Example: you sold a $310 strike call for $1.50 premium and the stock closed at $325 — you keep the $1.50 but pay back $15 of capped upside, netting **−$13.50/share**. The stock appreciation up to the strike is still yours (tracked separately as part of equity), but the *uncapped* portion of the rally is gone. In a strong bull market this is the dominant cost the overlay pays.
 - **CC (Covered Call):** A strategy where you own 100 shares of a stock and sell a call option against them. You collect the premium up front; if the stock stays below the strike at expiration, you keep the shares and the premium. If it rises above the strike, your shares may be called away at that price. "Covered" means you already own the shares, so you're not exposed to unlimited upside risk like a naked call.
 - **CSP (Cash-Secured Put):** A strategy where you sell a put option and set aside enough cash to buy 100 shares at the strike price if assigned. You collect the premium up front; if the stock stays above the strike, the put expires worthless and you keep the cash. If it falls below, you're obligated to buy the shares at the strike. CSPs are the "entry" half of the wheel — a way to get paid while waiting to buy a stock at a discount.
 - **CDF (Cumulative Distribution Function):** Answers the question "what's the probability a value falls at or below X?" Imagine filling a glass of water as you move left to right across a bell curve — at the far left it's nearly empty (0%), at the center it's half full (50%), at the far right it's nearly full (100%). In our context, the CDF converts a stock's distance from the strike price into a probability, which is exactly what Black-Scholes needs to price an option.

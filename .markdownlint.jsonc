@@ -5,13 +5,14 @@
   // use <details>/<summary> collapsibles so the answer stays hidden
   // until the reader has committed to a prediction — that hide-until-
   // clicked behavior is the active-recall mechanism, not decoration,
-  // and it renders on both GitHub and the generated notebook. <span> is
-  // allowed for one narrow purpose: wrapping a literal dollar sign as
-  // <span>$</span> on any line that has two or more, so GitHub's math
-  // renderer can't pair them into a LaTeX expression (its documented fix
-  // for prose dollars; \$ only escapes inside a math block). Lone dollar
-  // signs render fine bare and stay that way. Allow exactly these three
-  // elements; every other inline HTML stays flagged.
+  // and it renders on both GitHub and the generated notebook. Allow
+  // exactly those two elements; every other inline HTML stays flagged.
+  // (Literal currency dollars stay bare in prose: GitHub's .md renderer
+  // only typesets math it tags server-side and never tags dollar prose,
+  // and Substack doesn't render prose $...$ as math. The generated
+  // notebook is the one surface whose naive MathJax pass would pair bare
+  // dollars — make_notebook.py escapes them to \$ there, so the prose
+  // source stays clean.)
   // MD013 (line-length): every prose file in this repo (tutorial,
   // README, blog, this config's sibling Markdown) is authored
   // one-paragraph-per-line — sentences flow unwrapped and the
@@ -26,7 +27,7 @@
   // parents; siblings_only keeps that legal while still catching a real
   // duplicate (two same-named headings within one section).
   "default": true,
-  "MD033": { "allowed_elements": ["details", "summary", "span"] },
+  "MD033": { "allowed_elements": ["details", "summary"] },
   "MD013": false,
   "MD024": { "siblings_only": true }
 }

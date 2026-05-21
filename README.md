@@ -54,7 +54,7 @@ Statistical Significance (H0: overlay adds zero value vs. buy-and-hold)
     Clears t=3 bar (HLZ 2016)?          False    (multiple-testing adjusted)
 ```
 
-The portfolio is sized into whole 100-share contracts at the initial price; any leftover (here, <span>$</span>4,426 of <span>$</span>100K with MSFT at ~<span>$</span>48) sits as 0%-yield cash. Returns are measured against `capital`, so the cash drag is included. To run a single-contract simulation, omit `capital` from `params`.
+The portfolio is sized into whole 100-share contracts at the initial price; any leftover (here, $4,426 of $100K with MSFT at ~$48) sits as 0%-yield cash. Returns are measured against `capital`, so the cash drag is included. To run a single-contract simulation, omit `capital` from `params`.
 
 The bottom block tests whether the overlay's excess return over buy-and-hold is statistically distinguishable from zero, using Newey-West HAC standard errors that correct for the autocorrelation introduced by holding the same option position across multiple days. On this MSFT sample the t-stat is 0.46 — well below the conventional significance bar of 2 — meaning the $268K of headline overlay P&L isn't reliably distinguishable from noise. See the [tutorial's Part 5](tutorial_covered_call_backtest.md#part-5-robustness-checks--proving-its-not-luck) for the full reasoning.
 
