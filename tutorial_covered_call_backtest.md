@@ -67,14 +67,15 @@ Before you risk real money, you want to ask: "Does this actually work? How much 
 
 A backtest is a time machine. You rewind to the past, follow your rules perfectly, and measure what would have happened. It's not perfect, but it's way better than guessing.
 
-**Why most backtests are misleading:**
+**Why most backtests are misleading.** Start with the problem no code can engineer away: people run — and believe — a backtest only when recent conditions were rosy (lucky timing). Guarding against that is the job of the whole methodology, not a single trick. The engine uses one fixed 10-year window spanning bull, bear, and sideways markets, so the headline isn't a cherry-picked slice; the regime, Monte Carlo, and holdout checks in Part 5 and the conclusion probe it further.
 
-- People test only when things are going well (lucky timing)
+Underneath that timing problem sit three *mechanical* biases any single run can hide:
+
 - They peek at future prices while building today's decision (look-ahead bias)
 - They only count the survivors — the stocks that didn't go bankrupt (survivorship bias)
 - They tweak parameters so much that they overfit to random noise (overfitting)
 
-We engineer the first out of the code, sidestep the second, and attack the third head-on.
+We engineer the first of these out of the code, sidestep the second, and attack the third head-on.
 
 ### The Three Enemies of Backtesting
 
