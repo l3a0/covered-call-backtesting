@@ -1,14 +1,14 @@
 # A Profit Is Not an Edge
 
-*My covered-call backtest made $268,000 and passed every test I could throw at it. One honest statistic still says the edge is indistinguishable from luck.*
+*My covered-call backtest made \$268,000 and passed every test I could throw at it. One honest statistic still says the edge is indistinguishable from luck.*
 
 Here is the paradox I opened this series with, now stated in full.
 
-The covered-call overlay added **$268,000** on top of buy-and-hold Microsoft over ten years. It kept ~86% of its return when tested out-of-sample with no hindsight. It beat all five hundred scrambled price paths. It shrugged off parameter nudges. It made money in bull, bear, and sideways markets. By the standards most strategies are sold on, it is bulletproof.
+The covered-call overlay added **\$268,000** on top of buy-and-hold Microsoft over ten years. It kept ~86% of its return when tested out-of-sample with no hindsight. It beat all five hundred scrambled price paths. It shrugged off parameter nudges. It made money in bull, bear, and sideways markets. By the standards most strategies are sold on, it is bulletproof.
 
 And the evidence that the overlay itself added anything — as opposed to riding a stock that happened to go up 646% — is **statistically indistinguishable from zero.**
 
-![Two portfolio-value curves over 2016–2026 on a $100K start. The covered-call overlay line ends near $1.01M, slightly above the buy-and-hold Microsoft line; both rise together for most of the decade, with the overlay pulling modestly ahead.](../docs/figures/01_equity_curves.png)
+![Two portfolio-value curves over 2016–2026 on a \$100K start. The covered-call overlay line ends near \$1.01M, slightly above the buy-and-hold Microsoft line; both rise together for most of the decade, with the overlay pulling modestly ahead.](../docs/figures/01_equity_curves.png)
 
 *The reveal. This is the exact chart from the first post — same axes, same numbers, same quarter-million-dollar gap. Nothing about the picture changed. Everything about what it means is about to.*
 
@@ -20,7 +20,7 @@ Start with the distinction the whole post rests on, because almost every strateg
 
 **A profit** is a statement about one run of history: *this made money on this stock over these ten years.* **An edge** is a statement about the future: *this has a repeatable advantage that will probably show up again.* The first is a fact about the past. The second is a claim about a distribution — and claims about distributions need a measure of uncertainty attached, or they're just storytelling with a dollar sign in front.
 
-The t-statistic is that measure. It asks the second question directly: if the overlay added nothing, and the $268,000 was pure luck, how often would a sample this size hand you a result at least this good by chance alone? Above roughly 2, the answer is "rarely enough to take seriously." Below it, you're looking at noise wearing a nice suit.
+The t-statistic is that measure. It asks the second question directly: if the overlay added nothing, and the \$268,000 was pure luck, how often would a sample this size hand you a result at least this good by chance alone? Above roughly 2, the answer is "rarely enough to take seriously." Below it, you're looking at noise wearing a nice suit.
 
 The number that matters isn't the overlay's raw return. It's the overlay's return *over the benchmark you'd otherwise hold* — the excess. Stock drift cancels out of that subtraction, which is the entire point: it isolates what the strategy did, separate from what the stock did.
 
@@ -64,7 +64,7 @@ The t-stat isn't measuring that. It's measuring something stricter and more hone
 
 ![A histogram of daily excess returns, overlay minus buy-and-hold, in basis points. The distribution is a tall symmetric pile centered almost exactly on zero, with a sample mean fractionally positive and the Newey-West t-stat of 0.46 annotated.](../docs/figures/02_excess_histogram.png)
 
-*This is the $268,000, viewed as the thing the t-stat actually sees: a daily excess pile sitting on zero. The mean is positive by a hair — that hair, compounded over a decade, is the quarter-million dollars. A hair this far inside the noise is not an edge.*
+*This is the \$268,000, viewed as the thing the t-stat actually sees: a daily excess pile sitting on zero. The mean is positive by a hair — that hair, compounded over a decade, is the quarter-million dollars. A hair this far inside the noise is not an edge.*
 
 This is not a surprising result, and that's the point. It's almost exactly what the academic literature on the volatility risk premium predicts: the effect is real and harvestable at the *index* level, where it's been measured over many decades, and it's far weaker and noisier on any *single* name, where one stock's idiosyncratic path swamps the premium. A single-stock covered call on a ten-year sample is the setup most likely to show a strong dollar number and a t-stat that can't clear the bar. That's the established finding. This backtest's 0.46 is one specific, well-behaved instance of it.
 
@@ -88,7 +88,7 @@ Most marketing decks can answer neither. They report a profit, in large type, ov
 
 ## What the win actually was
 
-The win was never the $268,000. The strategy didn't have an edge over the thing it was supposed to beat, and four posts of increasingly hostile testing is how I came to know that with confidence instead of suspecting it with hope. The thing I actually built wasn't a money printer. It was an instrument honest enough to tell me, in a single number it had every opportunity to fudge, that the money printer wasn't one.
+The win was never the \$268,000. The strategy didn't have an edge over the thing it was supposed to beat, and four posts of increasingly hostile testing is how I came to know that with confidence instead of suspecting it with hope. The thing I actually built wasn't a money printer. It was an instrument honest enough to tell me, in a single number it had every opportunity to fudge, that the money printer wasn't one.
 
 That instrument is worth more than any backtest it will ever evaluate. Learning to build it, and to believe it when the answer disappoints you, is the entire skill. It's the whole series.
 

@@ -22,7 +22,7 @@ python download_prices.py --ticker SPY --period 5y
 python cc_backtest.py
 ```
 
-Sample output (MSFT 2016-04 → 2026-04, $100K portfolio):
+Sample output (MSFT 2016-04 → 2026-04, \$100K portfolio):
 
 ```text
 Capital:                         $  100,000.00
@@ -54,9 +54,9 @@ Statistical Significance (H0: overlay adds zero value vs. buy-and-hold)
     Clears t=3 bar (HLZ 2016)?          False    (multiple-testing adjusted)
 ```
 
-The portfolio is sized into whole 100-share contracts at the initial price; any leftover (here, $4,426 of $100K with MSFT at ~$48) sits as 0%-yield cash. Returns are measured against `capital`, so the cash drag is included. To run a single-contract simulation, omit `capital` from `params`.
+The portfolio is sized into whole 100-share contracts at the initial price; any leftover (here, \$4,426 of \$100K with MSFT at ~\$48) sits as 0%-yield cash. Returns are measured against `capital`, so the cash drag is included. To run a single-contract simulation, omit `capital` from `params`.
 
-The bottom block tests whether the overlay's excess return over buy-and-hold is statistically distinguishable from zero, using Newey-West HAC standard errors that correct for the autocorrelation introduced by holding the same option position across multiple days. On this MSFT sample the t-stat is 0.46 — well below the conventional significance bar of 2 — meaning the $268K of headline overlay P&L isn't reliably distinguishable from noise. See the [tutorial's Part 5](tutorial_covered_call_backtest.md#part-5-robustness-checks--proving-its-not-luck) for the full reasoning.
+The bottom block tests whether the overlay's excess return over buy-and-hold is statistically distinguishable from zero, using Newey-West HAC standard errors that correct for the autocorrelation introduced by holding the same option position across multiple days. On this MSFT sample the t-stat is 0.46 — well below the conventional significance bar of 2 — meaning the \$268K of headline overlay P&L isn't reliably distinguishable from noise. See the [tutorial's Part 5](tutorial_covered_call_backtest.md#part-5-robustness-checks--proving-its-not-luck) for the full reasoning.
 
 For an explanation of each output line — including what "assignment loss" means and why buybacks can dominate the overlay's gross premium income — see the [tutorial](tutorial_covered_call_backtest.md) (its Glossary defines the terms; Part 3 walks through the trade-by-trade math).
 
