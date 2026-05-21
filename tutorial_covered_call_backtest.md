@@ -1434,13 +1434,12 @@ The integrative one — these pull threads from every Part. Answer from memory b
 | Parameter | Conservative | Balanced | Aggressive |
 | --- | --- | --- | --- |
 | **call_delta** | 0.15–0.20 | 0.25 | 0.30–0.35 |
-| **put_delta** *(CSP phase only)* | -0.15 to -0.20 | -0.20 | -0.25 to -0.30 |
 | **dte** | 35–45 | 30 | 21 |
 | **close_at_pct** | 0.50 (close early) | 0.75 | 1.00 (hold to expiry) |
 | **Expected assignment freq.** | \~15% | \~25% | \~35% |
 | **Capital in use** | Low (less frequent sales) | Medium | High (constant selling) |
 
-**Recommendation for beginners:** Start with "Balanced" (0.25Δ call / 0.20Δ put, 30 DTE, 0.75 close_at_pct). It's tested and robust.
+**Recommendation for beginners:** Start with "Balanced" (0.25Δ call, 30 DTE, 0.75 close_at_pct). It's tested and robust.
 
 ### Decision Flowchart: "Should I Sell a CC Today?"
 
@@ -1453,7 +1452,6 @@ Is there an open position?
   │    └─ Otherwise → HOLD
   │
   └─ NO:
-       ├─ CSP phase + downtrend (SMA50 < SMA200)? → WAIT (optional; avoid put assignment into decline)
        ├─ Calculate rolling vol: σ = 30-day HV × regime multiplier (1.1/1.3/1.5)
        ├─ Find 0.25Δ strike using grid search
        ├─ Calculate premium using Black-Scholes
