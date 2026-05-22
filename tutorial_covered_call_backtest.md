@@ -270,7 +270,7 @@ def normal_cdf(x):
 
 ### Delta: The Probability Dial — What 0.20 Δ Actually Means
 
-Delta (Δ) is one of the most misunderstood Greek letters in finance.
+Delta (Δ) sounds technical, but it answers one simple question: how likely is your option to finish in-the-money?
 
 **Simple definition:** Delta is the probability that your option ends in-the-money at expiration.
 
