@@ -270,8 +270,6 @@ def normal_cdf(x):
 
 ### Delta: The Probability Dial — What 0.20 Δ Actually Means
 
-Delta (Δ) sounds technical, but it answers one simple question: how likely is your option to finish in-the-money?
-
 **Simple definition:** Delta is the probability that your option ends in-the-money at expiration.
 
 - **Δ = 0.20** → 20% chance the stock rises past the strike → sell a call with 20% ITM risk
