@@ -546,7 +546,7 @@ The real engine has no separate per-day function — [`cc_backtest.py::run_cc_ov
 
 ### Transaction Costs: Commission ($0.65/contract) + Slippage (3% of Premium)
 
-This is where backtests often lie.
+Leave transaction costs out of a backtest and every trade looks more profitable than it would in a real account.
 
 **Reality:**
 
@@ -563,7 +563,7 @@ The engine doesn't wrap this in a helper — it's one line inside [`cc_backtest.
 - Commission on open (0.65 per contract = $0.0065 per share): lose $0.0065
 - **Net credit:** $1.00 - $0.03 - $0.0065 = **$0.9635**
 
-Over a year with 12 calls sold, transaction costs can eat 5–10% of returns.
+Over a year with ~12 calls sold, slippage and commission consume roughly 3–5% of the premium collected. The slippage alone is a flat 3% by construction; the $0.65/contract commission adds the rest.
 
 ### The Dynamic IV Multiplier: Context Matters
 
@@ -656,14 +656,14 @@ Answer from memory before revealing — if one doesn't come, that section is wor
 
 1. "Never sell your shares" is *the* rule. When a short call goes deep in-the-money, what does the overlay actually do — and why does that make it an *overlay* rather than market timing?
 2. Before expiration the state machine has exactly two early-close triggers. Name both and give the one-line reason for each.
-3. The engine charges 3% slippage + $0.65/contract on every trade. Roughly what share of annual returns do costs consume, and what does the engine do when costs would exceed the credit?
+3. The engine charges 3% slippage + $0.65/contract on every trade. Roughly what share of the premium do these costs consume, and what does the engine do when costs would exceed the credit?
 
 <details>
 <summary>Reveal</summary>
 
 1. The share position is **permanent** — the engine never liquidates the underlying. When a short call goes deep ITM it **buys the call back** at delta > 0.70 (the `close_itm` rule) specifically to avoid assignment; assignment happens only as a fallback, when a call reaches expiration still ITM without the 0.70 or profit-target gate having closed it first — and even then the shares are modeled as held (the overlay books `premium − (price − strike)` while the stock's appreciation up to the strike stays in equity). Either path cycles only the *short call*, never the shares. Liquidating shares to dodge assignment would make it a market-timing bet on the stock, the opposite of running an income overlay on a position you hold anyway.
 2. **(a) 75% of the premium captured** → lock in most of the decay without riding through the gamma-heavy final stretch; **(b) delta > 0.70 (deep ITM)** → close to cap assignment damage before gamma compounds it. Anything short of those two: hold and recheck tomorrow.
-3. Roughly **5–10% of returns** over a year of ~monthly trades. If costs would exceed the credit (a near-worthless deep-OTM call), the engine **skips the trade** rather than open at a guaranteed loss.
+3. Roughly **3–5% of the premium** — the slippage is a flat 3% by construction, plus a small per-contract commission. If costs would exceed the credit (a near-worthless deep-OTM call), the engine **skips the trade** rather than open at a guaranteed loss.
 
 </details>
 
