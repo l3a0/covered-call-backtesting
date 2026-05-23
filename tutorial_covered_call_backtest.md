@@ -918,14 +918,14 @@ The implementation is [`cc_backtest.py::monte_carlo_shuffle`](https://github.com
 
 - Real return: \~915%
 - MC mean: \~657% (average across 500 shuffled paths)
-- MC percentile: 100 (our strategy beat 100% of random shuffles — the real return is higher than every single shuffled path's, with the shuffle max at \~870%)
-- This means: 0% of random price orderings produced a better return than our strategy did on the real price path.
+- MC percentile: 100 (in this seed-42 sample the real return tops every one of the 500 shuffled paths — the best reached \~870%)
+- What that 100 means: in *this* sample no scramble beat the real path. It does **not** mean the real ordering is unbeatable — at other seeds the percentile prints 98–99, with a handful of scrambles (\~0.5–1% of orderings) edging past. The real path sits around the **99th percentile** of orderings; seed 42 simply drew a sample with zero winners.
 
-**Interpretation:** Clearing the shuffled distribution rules out *sequence-luck* — the result survives destroying the trends and clusters. It does **not** establish skill or an edge over buy-and-hold: the shuffle mean (\~657%) is itself enormous because that's mostly the stock. Whether the overlay specifically adds value is the separate question the Newey-West test in *Statistical Significance* answers — in the negative.
+**Interpretation:** Landing in the far right tail of the shuffled distribution (\~99th percentile) rules out *sequence-luck* — the result survives destroying the trends and clusters. It does **not** establish skill or an edge over buy-and-hold: the shuffle mean (\~657%) is itself enormous because that's mostly the stock. Whether the overlay specifically adds value is the separate question the Newey-West test in *Statistical Significance* answers — in the negative.
 
 ![Histogram of total overlay returns across 500 shuffled price paths, roughly bell-shaped and centered near 657%. A dotted line marks the shuffle mean, a dashed line the best shuffle at ≈870%, and a solid red line at ≈915% sits to the right of the entire distribution — the real ordered path, beyond every shuffle.](docs/figures/09_monte_carlo.png)
 
-*Percentile 100, visualized. The shuffles keep the exact return set and destroy only the order, so the spread here is the return you'd get from MSFT's volatility with the trends and clusters removed. The real path sits outside the whole distribution: the overlay is harvesting a property of the return distribution, not a lucky sequence — but note the shuffle mean (\~657%) is itself enormous, which is the first hint that most of this return is the stock, not the overlay.*
+*The seed-42 sample, visualized. The shuffles keep the exact return set and destroy only the order, so the spread here is the return you'd get from MSFT's volatility with the trends and clusters removed. The real path sits in the far right tail — past every shuffle in this sample, around the 99th percentile of orderings: the overlay is harvesting a property of the return distribution, not a lucky sequence. But note the shuffle mean (\~657%) is itself enormous, the first hint that most of this return is the stock, not the overlay.*
 
 ### Sensitivity Analysis: Perturb Each Parameter, See If Results Collapse
 
@@ -1389,7 +1389,7 @@ Here's the complete process:
 *Overlay vs. buy-and-hold equity on the bundled MSFT data. The overlay finishes about $268K ahead. The gap is small through 2018, then widens through the 2019–2024 stretch and stays near $200–300K through the recent vol-heavy period — accumulating in the volatile middle years rather than in any single regime.*
 
 - ✅ Fixed params: \~915% total return on the bundled `$100K` configuration (final equity \~$1,015K; see Figure 1)
-- ✅ Monte Carlo: percentile 100 (real ordered path beats every one of 500 shuffled paths; max shuffled return \~870%)
+- ✅ Monte Carlo: real ordered path at the \~99th percentile of orderings (percentile prints 100 in the seed-42 sample — no scramble beat it there; max shuffled return \~870%)
 - ✅ Sensitivity: single-digit-% drops across both `call_delta` and `close_at_pct` perturbations
 - ✅ All regimes: bull, bear, sideways all profitable
 - ✅ Sharpe ratio vs cash (**rf** = risk-free rate; 4.5% is the engine default — see the `risk_free_rate` parameter in [`run_cc_overlay`](https://github.com/l3a0/covered-call-backtesting/blob/main/cc_backtest.py#L201)): \~1.12, vs buy-and-hold MSFT's \~0.72 over the same window — risk-adjusted *absolute* returns are strong
