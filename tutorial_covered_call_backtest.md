@@ -800,15 +800,15 @@ All three *per-axis* winners match the `__main__` defaults: `0.25Δ`, `21 DTE`, 
 
 **Why these defaults make sense:**
 
-1. **0.25Δ** is the sweet spot:
-   - Conservative (0.15Δ) misses too much premium
-   - Aggressive (0.35Δ) gets assigned too often
-   - 0.25 balances "collect income" with "keep the shares"
+1. **0.25Δ** is the top of the conservative grid:
+   - The walk-forward search only ranges over `[0.15, 0.20, 0.25]` — 0.25 is the most aggressive setting it can pick
+   - Lower (0.15Δ) leaves too much premium uncollected; pushing past the grid (0.30–0.35Δ) collects more but gets assigned too often
+   - 0.25 takes the most income the conservative range allows while still keeping the shares most of the time
 
 2. **21 DTE** is the monthly rhythm:
    - Matches typical options expiration cycles
    - Gives enough time for the trade to work out
-   - Allows 4–5 cycles per year for reinvesting premiums
+   - Runs roughly monthly — about 12 cycles a year for reinvesting premiums
 
 3. **75% profit target** is the sweet spot for closing:
    - Captures most of the premium decay without holding through the gamma-heavy final stretch
