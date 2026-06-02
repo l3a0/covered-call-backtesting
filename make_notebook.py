@@ -47,6 +47,9 @@ FIGURE_CALLS: dict[str, str] = {
     "09_monte_carlo.png": "fig9_monte_carlo(mc)",
     "10_regime_pnl.png": "fig10_regime_pnl(regimes)",
     "11_excess_acf.png": "fig11_excess_acf(daily_equity, summary)",
+    # 13 (Part 4 degrees-of-freedom) reuses the already-bound `records`; no new
+    # DATA_PREP binding needed. 08/12 stay blog-only and absent here.
+    "13_degrees_of_freedom.png": "fig13_degrees_of_freedom(records)",
 }
 
 IMAGE_RE = re.compile(r"^!\[.*\]\((?:\./)?docs/figures/([0-9A-Za-z_]+\.png)\)\s*$")
@@ -339,6 +342,7 @@ from make_figures import (
     fig9_monte_carlo,
     fig10_regime_pnl,
     fig11_excess_acf,
+    fig13_degrees_of_freedom,
     load_msft_csv,
 )
 

@@ -13,11 +13,13 @@ import pandas as pd
 import pytest
 
 from cc_backtest import (
+    _param_combinations,
     bs_delta,
     bs_price,
     calc_rolling_volatility,
     classify_regime,
     compute_statistics,
+    degrees_of_freedom,
     find_strike_for_delta,
     monte_carlo_shuffle,
     normal_cdf,
@@ -1105,6 +1107,49 @@ def _load_msft_csv() -> tuple[list[str], np.ndarray[Any, np.dtype[np.float64]]]:
     return dates, np.array(prices, dtype=np.float64)
 
 
+class TestDegreesOfFreedom:
+    """Pardo-style degrees-of-freedom validation (degrees_of_freedom).
+
+    Two independent checks: (A) the bar-level "% degrees of freedom
+    remaining" — Pardo's formal formula, which passes comfortably here —
+    and (B) the ~30-trade sample-size floor, which is the binding
+    constraint for a held-position overlay. The data-backed numbers
+    (median grid trade count, per-window winners) live in
+    TestMsftTenYearRegression; these lock the pure-function arithmetic.
+    """
+
+    def test_standard_in_sample_window(self) -> None:
+        # 2-year in-sample window: 504 bars − 3 free params − 30-bar lookback.
+        dof = degrees_of_freedom(504, n_parameters=3, indicator_lookback=30)
+        assert dof['consumed'] == 33
+        assert dof['remaining'] == 471
+        assert dof['pct_remaining'] == 0.9345  # 471/504, rounded to 4 dp
+        assert dof['passes_dof'] is True        # 93.45% clears the 90% floor
+        assert dof['passes_trades'] is None     # no n_trades supplied
+
+    def test_trade_count_floor(self) -> None:
+        # Check (B): the conventional 30-trade floor.
+        assert degrees_of_freedom(504, 3, 30, n_trades=24)['passes_trades'] is False
+        assert degrees_of_freedom(504, 3, 30, n_trades=30)['passes_trades'] is True
+        assert degrees_of_freedom(504, 3, 30, n_trades=50)['passes_trades'] is True
+
+    def test_bar_level_threshold(self) -> None:
+        # A tight 200-bar window: 167/200 = 83.5% < 90% → fails check (A).
+        tight = degrees_of_freedom(200, 3, 30)
+        assert tight['pct_remaining'] == 0.835
+        assert tight['passes_dof'] is False
+        # quantstrat's stricter 95% bar fails even the standard 504-bar window.
+        assert degrees_of_freedom(504, 3, 30, min_pct_remaining=0.95)['passes_dof'] is False
+
+    def test_full_sample_passes_both(self) -> None:
+        # Full 10y single run (2515 bars, 181 trades) passes both checks —
+        # which is exactly why the per-window walk-forward view, not the
+        # full-sample view, is the honest granularity for the DOF question.
+        dof = degrees_of_freedom(2515, 3, 30, n_trades=181)
+        assert dof['passes_dof'] is True
+        assert dof['passes_trades'] is True
+
+
 class TestMsftTenYearRegression:
     """Pin the headline numbers the tutorial and README quote for the bundled
     MSFT data.
@@ -1418,6 +1463,16 @@ class TestMsftTenYearRegression:
         assert close_counts[0.75] == 11
         assert close_counts[1.00] == 2
 
+        # Pardo "How Many Trades?" sample-size check (feeds degrees_of_freedom,
+        # check B): every record carries the in-sample trade count behind its
+        # winning fit. The binding constraint — 7 of the 15 windows fall short
+        # of the conventional 30-trade floor, and the median sits right on it.
+        # Pins fig13's caption and the Part 4 degrees-of-freedom prose.
+        n_trades = [r['n_trades'] for r in records]
+        assert all(isinstance(t, int) and t > 0 for t in n_trades)
+        assert sum(1 for t in n_trades if t < 30) == 7
+        assert sorted(n_trades)[len(n_trades) // 2] == 30  # median exactly at the floor
+
         # Cumulative OOS compound return: chain per-period 6mo returns.
         cumulative = 1.0
         for r in records:
@@ -1454,3 +1509,42 @@ class TestMsftTenYearRegression:
         # is ~467%, so the honest walk-forward edge over buy-and-hold is only
         # ~16 pp. Pin it so that framing is CI-verified wherever prose uses it.
         assert fixed_summary['buy_hold_return_pct'] == pytest.approx(466.57, abs=0.05)
+
+    def test_degrees_of_freedom_first_window(
+        self, data: tuple[list[str], np.ndarray[Any, np.dtype[np.float64]]]
+    ) -> None:
+        """Pin the Pardo degrees-of-freedom numbers the __main__ report and
+        the Part 4 tutorial prose cite for the first 2-year in-sample window.
+
+        Bar-level check (A) passes comfortably; the trade count (B) — median
+        ~24 across the grid, far below the 30-trade floor — is the binding
+        constraint. The contrast is the whole point: bar-counting flatters a
+        held-position overlay, so a clean 93.5% is necessary, not sufficient.
+        """
+        dates, prices = data
+        train_cut = pd.to_datetime(dates[0]) + pd.DateOffset(years=2)
+        is_dates = [d for d in dates if pd.to_datetime(d) < train_cut]
+        is_prices = prices[:len(is_dates)]
+        assert len(is_dates) == 504  # 2 years × 252 trading days
+
+        # Bar-level degrees of freedom (check A): 504 − 3 params − 30 lookback.
+        dof = degrees_of_freedom(len(is_dates), n_parameters=3, indicator_lookback=30)
+        assert dof['consumed'] == 33
+        assert dof['remaining'] == 471
+        assert dof['pct_remaining'] == 0.9345
+        assert dof['passes_dof'] is True
+
+        # Trade count across the 27-combo grid on that window (check B):
+        # median 24, range 12–50 — the figures the __main__ DOF block prints.
+        grid = {'call_delta': [0.15, 0.20, 0.25], 'dte': [21, 30, 45],
+                'close_at_pct': [0.50, 0.75, 1.00]}
+        base = {'risk_free_rate': 0.045, 'capital': 100_000}
+        counts = sorted(
+            int(run_cc_overlay(is_dates, is_prices, {**base, **c})[0]['num_calls_sold'])
+            for c in _param_combinations(grid)
+        )
+        assert counts[0] == 12
+        assert counts[-1] == 50
+        assert counts[len(counts) // 2] == 24  # median
+        # Wiring the median into the sample-size check trips it (24 < 30).
+        assert degrees_of_freedom(504, 3, 30, n_trades=counts[len(counts) // 2])['passes_trades'] is False

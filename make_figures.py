@@ -28,6 +28,9 @@ Produces PNGs in docs/figures/ that visualize:
      corrects, and why it's mild and negative here. (blog Post 4)
  12. Where the $268K comes from: gross premium → costs → net overlay
      P&L, as a waterfall. (blog Post 1)
+ 13. Pardo degrees of freedom: the bar-level budget (passes ~90%) beside
+     the per-window independent-trade count (strains the 30-trade floor).
+     (tutorial Part 4)
 
 Run: python make_figures.py
 """
@@ -835,6 +838,72 @@ def fig12_premium_waterfall(summary: dict[str, Any]) -> Figure:
     return fig
 
 
+def fig13_degrees_of_freedom(records: list[dict[str, Any]]) -> Figure:
+    """Pardo's two degrees-of-freedom views of the same fit, side by side.
+
+    Left: the bar-level accounting — 504 in-sample observations minus 3
+    free parameters and a 30-bar indicator lookback leaves ~93% "free,"
+    comfortably past Pardo's 90% rule of thumb. Right: the per-window
+    independent-trade count, the unit that actually carries statistical
+    evidence — median in the low 20s, several windows below the
+    conventional 30-trade floor. Same fit, opposite verdicts: the bar
+    count flatters a held-position overlay because one option drives many
+    correlated days of P&L.
+    """
+    n_obs, n_params, lookback = 504, 3, 30
+    consumed = n_params + lookback
+    remaining = n_obs - consumed
+    pct = remaining / n_obs
+
+    trade_counts = [int(r["n_trades"]) for r in records]
+    median_trades = sorted(trade_counts)[len(trade_counts) // 2]
+    below = sum(1 for t in trade_counts if t < 30)
+
+    fig, (axL, axR) = plt.subplots(1, 2, figsize=FIGSIZE)
+
+    # Left: the observation budget as one stacked horizontal bar.
+    label = "2-year\nin-sample\nwindow"
+    axL.barh([label], [remaining], color=GREEN, alpha=0.8, edgecolor="white",
+             label=f"Free: {remaining} bars ({pct * 100:.0f}%)")
+    axL.barh([label], [consumed], left=[remaining], color=ORANGE, alpha=0.85,
+             edgecolor="white",
+             label=f"Consumed: {n_params} params + {lookback}-bar lookback")
+    axL.axvline(n_obs * 0.90, color=RED, linestyle="--", linewidth=1.6,
+                label="Pardo 90% floor")
+    axL.set_xlim(0, n_obs)
+    axL.set_xlabel("Observations (trading days)", fontsize=12)
+    axL.set_title(f"What the bar count says: {pct * 100:.0f}% free — passes",
+                  fontsize=13)
+    axL.legend(loc="lower center", fontsize=10)
+    axL.grid(True, axis="x", linestyle="-", linewidth=0.4, color="#dddddd")
+    axL.set_axisbelow(True)
+
+    # Right: per-window winning-fit trade count vs the 30-trade floor.
+    idx = list(range(1, len(trade_counts) + 1))
+    colors = [GREEN if t >= 30 else RED for t in trade_counts]
+    axR.bar(idx, trade_counts, color=colors, alpha=0.8, edgecolor="white")
+    axR.axhline(30, color=RED, linestyle="--", linewidth=1.6,
+                label="30-trade floor (inference)")
+    axR.axhline(median_trades, color=GRAY, linestyle=":", linewidth=1.6,
+                label=f"median {median_trades} trades")
+    axR.set_xlabel("Walk-forward window", fontsize=12)
+    axR.set_ylabel("Independent trades (in-sample winner)", fontsize=12)
+    axR.set_title(
+        f"What the evidence says: {below}/{len(trade_counts)} windows below 30 — strains",
+        fontsize=13)
+    axR.set_xticks(idx)
+    axR.legend(loc="upper right", fontsize=10)
+    axR.grid(True, axis="y", linestyle="-", linewidth=0.4, color="#dddddd")
+    axR.set_axisbelow(True)
+
+    fig.suptitle(
+        "Two degrees-of-freedom views of the same fit: the bar count passes, "
+        "the trade count strains",
+        fontsize=15)
+    fig.tight_layout(rect=(0, 0, 1, 0.96))
+    return fig
+
+
 def main() -> None:
     os.makedirs(OUT, exist_ok=True)
 
@@ -942,6 +1011,12 @@ def main() -> None:
         f"{OUT}/12_premium_waterfall.png", dpi=SAVE_DPI, bbox_inches="tight"
     )
     print(f"  wrote {OUT}/12_premium_waterfall.png")
+    plt.close("all")
+
+    fig13_degrees_of_freedom(records).savefig(
+        f"{OUT}/13_degrees_of_freedom.png", dpi=SAVE_DPI, bbox_inches="tight"
+    )
+    print(f"  wrote {OUT}/13_degrees_of_freedom.png")
     plt.close("all")
 
 

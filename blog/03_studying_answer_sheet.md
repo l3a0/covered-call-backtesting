@@ -42,6 +42,14 @@ Now the part that actually matters. Retaining 86% of an in-sample number is reas
 
 *No collapse — and no real separation either. The honest blue curve stays well clear of any collapse, but it spends the whole decade a hair above the gray buy-and-hold line. The win that looked like 96 points is a 16-point sliver once the hindsight is gone.*
 
+## The check that passes on paper
+
+There's one test I skipped past, and it's worth pausing on, because it cuts the other way. Before trusting a walk-forward result, you're supposed to ask whether each training window even held enough data to tune three settings. Robert Pardo, who popularized walk-forward testing, has a rule of thumb: tally your data points, subtract what the strategy's moving parts consume, and keep most of the total — north of 90% — free. Two years of daily prices is about 504 trading days; the strategy spends 33 of them and leaves 93% free. It passes, comfortably.
+
+Except that figure flatters the strategy, and Pardo knew it. Days are the wrong unit when a single position sits on the books for weeks — one call I sell drives the profit and loss for the next month, so those daily observations aren't independent witnesses; they're one witness repeating itself. The honest unit is the *trade*. A two-year window produces only about two dozen of them, short of the ~30 that's the conventional floor for drawing a statistical conclusion at all. Clean on the calendar, thin on the evidence that matters.
+
+That gap — fine by the day count, short by the trade count — is the lesson the whole post keeps teaching, arriving one layer earlier. A reassuring number means nothing until you've asked what it actually measures. Which is exactly the question the next three tests put to the returns.
+
 ## Three more ways to attack it
 
 Walk-forward catches overfitting. It doesn't catch everything, so you attack the strategy from three more directions.
