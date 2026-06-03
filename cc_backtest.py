@@ -889,7 +889,7 @@ def walk_forward_optimization(
     prices: NDArray[np.floating[Any]] | list[float],
     param_grid: dict[str, list[float]],
     fixed_params: dict[str, float] | None = None,
-    train_years: int = 2,
+    train_years: int = 3,
     test_months: int = 6,
     roll_months: int = 6,
 ) -> tuple[pd.DataFrame, list[dict[str, Any]]]:
@@ -905,7 +905,8 @@ def walk_forward_optimization(
         fixed_params: parameters held constant across every combo
             (default: `{'risk_free_rate': 0.045, 'capital': 100_000}`).
         train_years: in-sample training window length in years
-            (default 2).
+            (default 3 — sized so every walk-forward window clears the
+            ~30-trade Pardo sample-size floor; see `degrees_of_freedom`).
         test_months: out-of-sample test window length in months
             (default 6).
         roll_months: how far to advance between iterations in months
@@ -944,7 +945,7 @@ def walk_forward_optimization(
     end_date = cast('pd.Timestamp', df['date'].max())  # pyright: ignore[reportUnknownMemberType]
     # The "knife" between train and test.
     # We start train_years in so there's enough history for the first training window.
-    # Example: start_date = Apr 2014, train_years = 2 → current_date = Apr 2016
+    # Example: start_date = Apr 2014, train_years = 3 → current_date = Apr 2017
     current_date = start_date + pd.DateOffset(years=train_years)
 
     # Keep rolling as long as there's enough data left for a complete test window.
@@ -955,9 +956,9 @@ def walk_forward_optimization(
         #   train_start ←— train_years —→ train_end/test_start ←— test_months —→ test_end
         #                                       ↑ current_date
         #
-        # Iter 1: [Apr 2014 – Apr 2016] train → [Apr 2016 – Oct 2016] test
-        # Iter 2: [Oct 2014 – Oct 2016] train → [Oct 2016 – Apr 2017] test
-        # Iter 3: [Apr 2015 – Apr 2017] train → [Apr 2017 – Oct 2017] test
+        # Iter 1: [Apr 2014 – Apr 2017] train → [Apr 2017 – Oct 2017] test
+        # Iter 2: [Oct 2014 – Oct 2017] train → [Oct 2017 – Apr 2018] test
+        # Iter 3: [Apr 2015 – Apr 2018] train → [Apr 2018 – Oct 2018] test
 
         # Look BACKWARD
         train_start = current_date - pd.DateOffset(years=train_years)
@@ -1419,14 +1420,15 @@ if __name__ == '__main__':
     print(f"    {'Clears t=3 bar?':<32}{str(stats['passes_t_3']):>15}{str(hedge_stats['passes_t_3']):>15}")
     print()
 
-    # Degrees of Freedom (Pardo 2008): is ONE 2-year in-sample window big
-    # enough to optimize 3 parameters on? Two checks. The bar-level % passes
-    # comfortably; the trade count — the unit that actually carries
-    # statistical evidence — does not. A held-position overlay's daily bars
-    # aren't independent (one call drives ~21 days of P&L), so the bar count
-    # flatters the fit: a clean % here is necessary, not sufficient. The
-    # binding constraint is the trade count, then the Newey-West t-stat above.
-    train_cut = pd.to_datetime(date_list[0]) + pd.DateOffset(years=2)
+    # Degrees of Freedom (Pardo 2008): is ONE in-sample window big enough to
+    # optimize 3 parameters on? Two checks, for the default 3-year window. The
+    # bar-level % passes comfortably; the trade count — the unit that actually
+    # carries statistical evidence — now clears the ~30 floor too. That is
+    # exactly why the window is 3 years: at 2 years the median grid fit lands
+    # at ~24 trades, below the floor (see tutorial Part 4). Note both checks
+    # passing is necessary, not sufficient — the edge still hinges on the
+    # Newey-West t-stat above, which is full-sample and unaffected by this.
+    train_cut = pd.to_datetime(date_list[0]) + pd.DateOffset(years=3)
     is_dates = [d for d in date_list if pd.to_datetime(d) < train_cut]
     is_prices = prices_arr[:len(is_dates)]
     dof_grid: dict[str, list[float]] = {
@@ -1441,10 +1443,10 @@ if __name__ == '__main__':
     )
     median_trades = is_trade_counts[len(is_trade_counts) // 2]
     dof = degrees_of_freedom(len(is_dates), n_parameters=3, indicator_lookback=30, n_trades=median_trades)
-    print("Degrees of Freedom — 2-year in-sample window (Pardo 2008)")
+    print("Degrees of Freedom — 3-year in-sample window (Pardo 2008)")
     print(f"    Observations (trading days): {dof['n_observations']:>12}")
     print(f"    Consumed (3 params + 30 LB): {dof['consumed']:>12}")
     print(f"    Remaining (free):            {dof['remaining']:>12}    ({dof['pct_remaining'] * 100:.1f}% — Pardo floor 90%)")
     print(f"    Bar-level DOF adequate?      {str(dof['passes_dof']):>12}    (necessary, not sufficient)")
     print(f"    Independent trades (median): {dof['n_trades']:>12}    (grid range {is_trade_counts[0]}-{is_trade_counts[-1]})")
-    print(f"    >= 30 trades for inference?  {str(dof['passes_trades']):>12}    (the binding constraint)")
+    print(f"    >= 30 trades for inference?  {str(dof['passes_trades']):>12}    (clears it; 2-year window would not)")

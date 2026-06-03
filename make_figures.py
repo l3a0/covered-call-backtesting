@@ -17,7 +17,7 @@ Produces PNGs in docs/figures/ that visualize:
      seller turns, with the income band and the 0.25 strike marked.
      (blog Post 2)
   7. Walk-forward schematic: the real train/lock/test/roll windows
-     across all 15 cycles on the MSFT data. (blog Post 3)
+     across all 13 cycles on the MSFT data. (blog Post 3)
   8. In-sample vs. honest out-of-sample vs. buy-and-hold growth over
      the walk-forward span. (blog Post 3)
   9. Monte Carlo shuffle: the real ordered path's return against the
@@ -28,9 +28,9 @@ Produces PNGs in docs/figures/ that visualize:
      corrects, and why it's mild and negative here. (blog Post 4)
  12. Where the $268K comes from: gross premium → costs → net overlay
      P&L, as a waterfall. (blog Post 1)
- 13. Pardo degrees of freedom: the bar-level budget (passes ~90%) beside
-     the per-window independent-trade count (strains the 30-trade floor).
-     (tutorial Part 4)
+ 13. Pardo degrees of freedom: per-window trade count, 2-year window
+     (strains the 30-trade floor) vs 3-year (clears it) — why the
+     optimization window is 3 years. (tutorial Part 4)
 
 Run: python make_figures.py
 """
@@ -567,15 +567,15 @@ def fig7_walk_forward_schematic(records: list[dict[str, Any]]) -> Figure:
     ax.set_ylabel("Walk-forward cycle", fontsize=12)
     ax.set_yticks(range(1, len(records) + 1))
     ax.set_title(
-        "Studying for a different test — 15 train/lock/test/roll cycles (MSFT)",
+        "Studying for a different test — 13 train/lock/test/roll cycles (MSFT)",
         fontsize=14,
         pad=15,
     )
     ax.text(
         0.5, -0.12,
-        "The strike dial locked onto Δ0.25 in 14 of 15 cycles; the other two "
-        "knobs wandered, but stayed in a tight neighborhood of the middle "
-        "setting — labels mark cycles that left Δ0.25/21d/0.75.",
+        "The strike dial locked onto Δ0.25 in all 13 cycles; DTE and close-pct "
+        "wandered between adjacent grid values, but stayed in a tight "
+        "neighborhood — labels mark cycles that left Δ0.25/21d/0.75.",
         transform=ax.transAxes, ha="center", fontsize=10, color="#555555",
         style="italic",
     )
@@ -838,67 +838,48 @@ def fig12_premium_waterfall(summary: dict[str, Any]) -> Figure:
     return fig
 
 
-def fig13_degrees_of_freedom(records: list[dict[str, Any]]) -> Figure:
-    """Pardo's two degrees-of-freedom views of the same fit, side by side.
+def fig13_degrees_of_freedom(
+    records_2yr: list[dict[str, Any]], records_3yr: list[dict[str, Any]]
+) -> Figure:
+    """Why the optimization window is 3 years: the per-window trade count,
+    before and after.
 
-    Left: the bar-level accounting — 504 in-sample observations minus 3
-    free parameters and a 30-bar indicator lookback leaves ~93% "free,"
-    comfortably past Pardo's 90% rule of thumb. Right: the per-window
-    independent-trade count, the unit that actually carries statistical
-    evidence — median in the low 20s, several windows below the
-    conventional 30-trade floor. Same fit, opposite verdicts: the bar
-    count flatters a held-position overlay because one option drives many
-    correlated days of P&L.
+    Pardo's sample-size floor (~30 trades) is the binding degrees-of-freedom
+    check for a held-position overlay — the bar-level "% free" passes either
+    way (93.5% at 2 years, 95.6% at 3). Left: a 2-year window leaves the
+    winning fit below the floor in 7 of 15 walk-forward windows (median ~30).
+    Right: a 3-year window lifts every one of the 13 windows past it
+    (median ~54). That gap is the reason the engine defaults to 3 years.
     """
-    n_obs, n_params, lookback = 504, 3, 30
-    consumed = n_params + lookback
-    remaining = n_obs - consumed
-    pct = remaining / n_obs
+    def panel(ax, records, years, label_floor):
+        counts = [int(r["n_trades"]) for r in records]
+        med = sorted(counts)[len(counts) // 2]
+        below = sum(1 for t in counts if t < 30)
+        idx = list(range(1, len(counts) + 1))
+        colors = [GREEN if t >= 30 else RED for t in counts]
+        ax.bar(idx, counts, color=colors, alpha=0.8, edgecolor="white")
+        ax.axhline(30, color=RED, linestyle="--", linewidth=1.6,
+                   label="Pardo 30-trade floor" if label_floor else None)
+        ax.axhline(med, color=GRAY, linestyle=":", linewidth=1.6,
+                   label=f"median {med}")
+        verdict = (f"{below}/{len(counts)} below the floor — strains" if below
+                   else f"all {len(counts)} clear it")
+        ax.set_title(f"{years}-year window: {verdict}", fontsize=13)
+        ax.set_xlabel("Walk-forward window", fontsize=12)
+        ax.set_xticks(idx)
+        ax.legend(loc="upper left", fontsize=10)
+        ax.grid(True, axis="y", linestyle="-", linewidth=0.4, color="#dddddd")
+        ax.set_axisbelow(True)
+        return below, len(counts)
 
-    trade_counts = [int(r["n_trades"]) for r in records]
-    median_trades = sorted(trade_counts)[len(trade_counts) // 2]
-    below = sum(1 for t in trade_counts if t < 30)
-
-    fig, (axL, axR) = plt.subplots(1, 2, figsize=FIGSIZE)
-
-    # Left: the observation budget as one stacked horizontal bar.
-    label = "2-year\nin-sample\nwindow"
-    axL.barh([label], [remaining], color=GREEN, alpha=0.8, edgecolor="white",
-             label=f"Free: {remaining} bars ({pct * 100:.0f}%)")
-    axL.barh([label], [consumed], left=[remaining], color=ORANGE, alpha=0.85,
-             edgecolor="white",
-             label=f"Consumed: {n_params} params + {lookback}-bar lookback")
-    axL.axvline(n_obs * 0.90, color=RED, linestyle="--", linewidth=1.6,
-                label="Pardo 90% floor")
-    axL.set_xlim(0, n_obs)
-    axL.set_xlabel("Observations (trading days)", fontsize=12)
-    axL.set_title(f"What the bar count says: {pct * 100:.0f}% free — passes",
-                  fontsize=13)
-    axL.legend(loc="lower center", fontsize=10)
-    axL.grid(True, axis="x", linestyle="-", linewidth=0.4, color="#dddddd")
-    axL.set_axisbelow(True)
-
-    # Right: per-window winning-fit trade count vs the 30-trade floor.
-    idx = list(range(1, len(trade_counts) + 1))
-    colors = [GREEN if t >= 30 else RED for t in trade_counts]
-    axR.bar(idx, trade_counts, color=colors, alpha=0.8, edgecolor="white")
-    axR.axhline(30, color=RED, linestyle="--", linewidth=1.6,
-                label="30-trade floor (inference)")
-    axR.axhline(median_trades, color=GRAY, linestyle=":", linewidth=1.6,
-                label=f"median {median_trades} trades")
-    axR.set_xlabel("Walk-forward window", fontsize=12)
-    axR.set_ylabel("Independent trades (in-sample winner)", fontsize=12)
-    axR.set_title(
-        f"What the evidence says: {below}/{len(trade_counts)} windows below 30 — strains",
-        fontsize=13)
-    axR.set_xticks(idx)
-    axR.legend(loc="upper right", fontsize=10)
-    axR.grid(True, axis="y", linestyle="-", linewidth=0.4, color="#dddddd")
-    axR.set_axisbelow(True)
+    fig, (axL, axR) = plt.subplots(1, 2, figsize=FIGSIZE, sharey=True)
+    panel(axL, records_2yr, 2, label_floor=True)
+    panel(axR, records_3yr, 3, label_floor=True)
+    axL.set_ylabel("Independent trades (in-sample winner)", fontsize=12)
 
     fig.suptitle(
-        "Two degrees-of-freedom views of the same fit: the bar count passes, "
-        "the trade count strains",
+        "Why a 3-year optimization window: it lifts every walk-forward fit "
+        "past Pardo's 30-trade floor",
         fontsize=15)
     fig.tight_layout(rect=(0, 0, 1, 0.96))
     return fig
@@ -970,8 +951,10 @@ def main() -> None:
     print(f"  wrote {OUT}/06_delta_dial.png")
     plt.close("all")
 
-    print("  running walk-forward optimization (15 cycles × 27 combos)...")
+    print("  running walk-forward optimization (3yr train: 13 cycles × 27 combos)...")
     oos_equity, records = walk_forward_optimization(dates, prices, param_grid)
+    # 2-year records for the fig13 before/after contrast (the window we did NOT pick).
+    _, records_2yr = walk_forward_optimization(dates, prices, param_grid, train_years=2)
 
     fig7_walk_forward_schematic(records).savefig(
         f"{OUT}/07_walk_forward_schematic.png", dpi=SAVE_DPI, bbox_inches="tight"
@@ -1013,7 +996,7 @@ def main() -> None:
     print(f"  wrote {OUT}/12_premium_waterfall.png")
     plt.close("all")
 
-    fig13_degrees_of_freedom(records).savefig(
+    fig13_degrees_of_freedom(records_2yr, records).savefig(
         f"{OUT}/13_degrees_of_freedom.png", dpi=SAVE_DPI, bbox_inches="tight"
     )
     print(f"  wrote {OUT}/13_degrees_of_freedom.png")

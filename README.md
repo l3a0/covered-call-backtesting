@@ -53,20 +53,20 @@ Statistical Significance (H0: overlay adds zero value vs. buy-and-hold)
     Clears t=2 bar?                     False    (conventional significance)
     Clears t=3 bar (HLZ 2016)?          False    (multiple-testing adjusted)
 
-Degrees of Freedom — 2-year in-sample window (Pardo 2008)
-    Observations (trading days):          504
+Degrees of Freedom — 3-year in-sample window (Pardo 2008)
+    Observations (trading days):          756
     Consumed (3 params + 30 LB):           33
-    Remaining (free):                     471    (93.5% — Pardo floor 90%)
+    Remaining (free):                     723    (95.6% — Pardo floor 90%)
     Bar-level DOF adequate?              True    (necessary, not sufficient)
-    Independent trades (median):           24    (grid range 12-50)
-    >= 30 trades for inference?         False    (the binding constraint)
+    Independent trades (median):           36    (grid range 17-73)
+    >= 30 trades for inference?          True    (clears it; 2-year window would not)
 ```
 
 The portfolio is sized into whole 100-share contracts at the initial price; any leftover (here, $4,426 of $100K with MSFT at ~$48) sits as 0%-yield cash. Returns are measured against `capital`, so the cash drag is included. To run a single-contract simulation, omit `capital` from `params`.
 
 The bottom block tests whether the overlay's excess return over buy-and-hold is statistically distinguishable from zero, using Newey-West HAC standard errors that correct for the autocorrelation introduced by holding the same option position across multiple days. On this MSFT sample the t-stat is 0.46 — well below the conventional significance bar of 2 — meaning the $268K of headline overlay P&L isn't reliably distinguishable from noise. See the [tutorial's Part 5](tutorial_covered_call_backtest.md#part-5-robustness-checks--proving-its-not-luck) for the full reasoning.
 
-The final block reports Robert Pardo's degrees-of-freedom check for one 2-year walk-forward training window. The bar-level test passes — 504 observations minus 3 free parameters and a 30-bar indicator lookback leaves 93.5% free, above Pardo's ~90% floor — but it is necessary, not sufficient: a held-position overlay's daily bars aren't independent, so the count that binds is the trade count (median ~24 per window, below the conventional ~30 floor). A clean percentage means the model isn't over-parameterized, not that the edge is real. See [tutorial Part 4](tutorial_covered_call_backtest.md#part-4-walk-forward-optimization).
+The final block reports Robert Pardo's degrees-of-freedom check for the default 3-year walk-forward training window. Both checks pass: the bar-level test (756 observations minus 3 free parameters and a 30-bar indicator lookback leaves 95.6% free, above Pardo's ~90% floor) and — the binding one — the ~30-trade sample-size floor, which the 3-year window clears (median 36 trades). The window is sized to 3 years precisely for that: a 2-year window leaves the median grid fit at ~24 trades, short of the floor. Note this is necessary, not sufficient — a clean DOF check means the model isn't over-parameterized, not that the edge is real (the t-stat above settles that). See [tutorial Part 4](tutorial_covered_call_backtest.md#part-4-walk-forward-optimization).
 
 For an explanation of each output line — including what "assignment loss" means and why buybacks can dominate the overlay's gross premium income — see the [tutorial](tutorial_covered_call_backtest.md) (its Glossary defines the terms; Part 3 walks through the trade-by-trade math).
 
@@ -99,7 +99,7 @@ CI runs `ruff`, `pyright`, the test suite, and a backtest smoke test on every PR
 
 ## Strategy parameters
 
-Edit the `params` dict at the bottom of [cc_backtest.py](cc_backtest.py#L1350):
+Edit the `params` dict at the bottom of [cc_backtest.py](cc_backtest.py#L1351):
 
 | Param | Default | Meaning |
 | --- | --- | --- |
