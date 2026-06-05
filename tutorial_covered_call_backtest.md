@@ -71,9 +71,9 @@ A backtest is a time machine. You rewind to the past, follow your rules perfectl
 
 Underneath that timing problem sit three *mechanical* biases any single run can hide:
 
-- They peek at future prices while building today's decision (look-ahead bias)
-- They only count the survivors — the stocks that didn't go bankrupt (survivorship bias)
-- They tweak parameters so much that they overfit to random noise (overfitting)
+- They peek at future prices while building today's decision (look-ahead bias).
+- They only count the survivors — the stocks that didn't go bankrupt (survivorship bias).
+- They tweak parameters so much that they overfit to random noise (overfitting).
 
 We engineer the first of these out of the code, sidestep the second, and attack the third head-on.
 
@@ -398,15 +398,15 @@ In the production engine `estimate_iv(rolling_vol)` does steps 2 and 3 together 
 
 **Why these multipliers?**
 
-- As a rough practitioner rule of thumb, implied volatility tends to run on the order of 20–40% above realized volatility — the **volatility risk premium** (Bakshi & Kapadia 2003; Coval & Shumway 2001 establish the premium's existence and sign; the specific band is lore, not a figure from those papers)
-- But the gap **varies by regime**: when vol is already high, IV doesn't spike as much above HV; when vol is low, IV tends to stay well above HV (mean-reversion pricing)
-- The regime-based approach (1.1×/1.3×/1.5×) captures this dynamic better than a flat constant
+- As a rough practitioner rule of thumb, implied volatility tends to run on the order of 20–40% above realized volatility — the **volatility risk premium** (Bakshi & Kapadia 2003; Coval & Shumway 2001 establish the premium's existence and sign; the specific band is lore, not a figure from those papers).
+- But the gap **varies by regime**: when vol is already high, IV doesn't spike as much above HV; when vol is low, IV tends to stay well above HV (mean-reversion pricing).
+- The regime-based approach (1.1×/1.3×/1.5×) captures this dynamic better than a flat constant.
 
 **When this still breaks down:**
 
-- **Before earnings:** IV spikes way above HV (the market expects a big move)
-- **After a crash:** HV explodes but IV might normalize faster (panic recedes)
-- **In persistent trends:** HV might be high (the stock is moving a lot) but IV might be low (it's moving in one direction, so options are more predictable)
+- **Before earnings:** IV spikes way above HV (the market expects a big move).
+- **After a crash:** HV explodes but IV might normalize faster (panic recedes).
+- **In persistent trends:** HV might be high (the stock is moving a lot) but IV might be low (it's moving in one direction, so options are more predictable).
 
 We implement this regime-based approach in Part 3's `run_cc_overlay()` engine.
 
@@ -809,23 +809,23 @@ The strike dial is unanimous — `call_delta` is 0.25 in all 13 periods. `dte` f
 **Why these defaults make sense:**
 
 1. **0.25Δ** is the top of the conservative grid:
-   - The walk-forward search only ranges over `[0.15, 0.20, 0.25]` — 0.25 is the most aggressive setting it can pick
-   - Lower (0.15Δ) leaves too much premium uncollected; pushing past the grid (0.30–0.35Δ) collects more but gets assigned too often
-   - 0.25 takes the most income the conservative range allows while still keeping the shares most of the time
+   - The walk-forward search only ranges over `[0.15, 0.20, 0.25]` — 0.25 is the most aggressive setting it can pick.
+   - Lower (0.15Δ) leaves too much premium uncollected; pushing past the grid (0.30–0.35Δ) collects more but gets assigned too often.
+   - 0.25 takes the most income the conservative range allows while still keeping the shares most of the time.
 
 2. **21 DTE** is the monthly rhythm:
-   - Matches typical options expiration cycles
-   - Gives enough time for the trade to work out
-   - Runs roughly monthly — about 12 cycles a year for reinvesting premiums
+   - Matches typical options expiration cycles.
+   - Gives enough time for the trade to work out.
+   - Runs roughly monthly — about 12 cycles a year for reinvesting premiums.
 
 3. **75% profit target** is the default, with early-to-mid closing the robust region:
-   - Captures most of the premium decay without holding through the gamma-heavy final stretch
-   - Holding to expiry (100%) means riding through the period where assignment risk is highest and time decay slows — the optimizer never picks it
-   - Walk-forward splits between 0.75 (7 of 13 periods) and the earlier 0.50 (6 of 13) — both early-to-mid profit-taking. The 3-year window makes 0.50 competitive, but 0.75 still edges it and stays the `__main__` default
+   - Captures most of the premium decay without holding through the gamma-heavy final stretch.
+   - Holding to expiry (100%) means riding through the period where assignment risk is highest and time decay slows — the optimizer never picks it.
+   - Walk-forward splits between 0.75 (7 of 13 periods) and the earlier 0.50 (6 of 13) — both early-to-mid profit-taking. The 3-year window makes 0.50 competitive, but 0.75 still edges it and stays the `__main__` default.
 
 4. **Deep-ITM close at delta > 0.70** caps assignment damage:
-   - When the call goes deep ITM, gamma is steep and a small adverse move can wipe out months of premium income
-   - Closing early at the 0.70-delta threshold gives up the last sliver of time value to escape before assignment crystallizes the full upside loss
+   - When the call goes deep ITM, gamma is steep and a small adverse move can wipe out months of premium income.
+   - Closing early at the 0.70-delta threshold gives up the last sliver of time value to escape before assignment crystallizes the full upside loss.
 
 ### The Key Finding: Walk-Forward Tells the Honest Story
 
