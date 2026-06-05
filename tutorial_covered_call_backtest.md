@@ -964,11 +964,11 @@ The implementation is [`cc_backtest.py::sensitivity_analysis`](https://github.co
 ```text
 call_delta sensitivity:
   -0.10: 837%   -0.05: 827%   base: 915%   +0.05: 900%   +0.10: 904%
-  Swing: 87 pp (max−min) ≈ 10% of base; worst drop from base is 87 pp ≈ 10%.
+  Swing: 87 pp (max−min) ≈ 9.6% of base; worst drop from base is 87 pp (9.6%).
 
 close_at_pct sensitivity:
   -0.20: 946%   -0.10: 956%   base: 915%   +0.10: 857%   +0.20: 902%
-  Swing: 100 pp (max−min) ≈ 11% of base; worst drop from base is 58 pp ≈ 6%.
+  Swing: 100 pp (max−min) ≈ 11% of base; worst drop from base is 58 pp (6.3%).
 
 Strategy is ROBUST: both params produce single-digit-percent drops under
 realistic perturbations. Worth noting: the base config isn't always the
@@ -982,13 +982,13 @@ Math behind the call_delta sensitivity:
   base = 915%, worst variant = 827% (at -0.05 offset, i.e., 0.20Δ)
   Drop = 915 − 827 = 87 percentage points
   Relative drop = 87 / 915 = 9.6% of base return
-  → Changing call_delta by 0.05 (from 0.25 to 0.20) costs ~10% of return.
+  → Changing call_delta by 0.05 (from 0.25 to 0.20) costs ~9.6% of return (just under the 10% bar).
 
 Math behind the close_at_pct sensitivity:
   base = 915%, worst variant = 857% (at +0.10 offset, i.e., 0.85)
   Drop = 915 − 857 = 58 percentage points
   Relative drop = 58 / 915 = 6.3% of base return
-  → Changing close_at_pct by 0.10 (from 0.75 to 0.85) costs ~6% of return.
+  → Changing close_at_pct by 0.10 (from 0.75 to 0.85) costs ~6.3% of return.
 ```
 
 **Our result: "robust."** The verdict is one number per parameter — the *worst drop from base* under the perturbations — against a 10% bar (`sensitivity_analysis`; pinned by `test_sensitivity_perturbations`). The numbers:
