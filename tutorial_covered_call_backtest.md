@@ -964,7 +964,7 @@ The implementation is [`cc_backtest.py::sensitivity_analysis`](https://github.co
 ```text
 call_delta sensitivity:
   -0.10: 837%   -0.05: 827%   base: 915%   +0.05: 900%   +0.10: 904%
-  Swing: 87 pp (max−min) ≈ 10% of base; worst drop from base is 87 pp.
+  Swing: 87 pp (max−min) ≈ 10% of base; worst drop from base is 87 pp ≈ 10%.
 
 close_at_pct sensitivity:
   -0.20: 946%   -0.10: 956%   base: 915%   +0.10: 857%   +0.20: 902%
