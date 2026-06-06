@@ -1484,7 +1484,7 @@ Is there an open position?
        ├─ Find 0.25Δ strike using grid search
        ├─ Calculate premium using Black-Scholes
        ├─ Apply 3% slippage + $0.65 commission
-       └─ SELL CALL (if net premium > 1% of stock price)
+       └─ SELL CALL (if net premium > 0)
 ```
 
 ### The Limitations We Haven't Solved
