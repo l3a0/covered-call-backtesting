@@ -1467,7 +1467,7 @@ The integrative one — these pull threads from every Part. Answer from memory b
 | **Expected assignment freq.** | \~15% | \~25% | \~35% |
 | **Capital in use** | Low (less frequent sales) | Medium | High (constant selling) |
 
-**Recommendation for beginners:** Start with "Balanced" (0.25Δ call, 30 DTE, 0.75 close_at_pct). It's tested and robust.
+**Recommendation for beginners:** Start with the tested defaults: 0.25Δ call, 21 DTE, 0.75 close_at_pct — the configuration behind every result in this tutorial.
 
 ### Decision Flowchart: "Should I Sell a CC Today?"
 
