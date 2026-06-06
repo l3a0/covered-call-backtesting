@@ -1393,21 +1393,21 @@ Here's the complete process:
 
 **Good signs:**
 
-- Walk-forward efficiency (out-of-sample ÷ in-sample) stays healthy — roughly two-thirds is the common practitioner rule of thumb (Pardo 2008), not a small fraction. Treat the band as lore, not a law
-- Monte Carlo: real return clears the shuffle distribution (rules out sequence-luck — does not by itself establish edge; see the Newey-West test in Part 5)
-- Sensitivity: nearby parameters give similar results (not overfit)
-- Works in all regimes (not just bull markets)
-- Sharpe ratio > 0.8 (good risk-adjusted returns)
-- Newey-West t-stat on excess returns > 2 (>3 if you tested many parameter combos)
+- Walk-forward efficiency (out-of-sample ÷ in-sample) stays healthy — roughly two-thirds is the common practitioner rule of thumb (Pardo 2008), not a small fraction. Treat the band as lore, not a law.
+- Monte Carlo: real return clears the shuffle distribution (rules out sequence-luck — does not by itself establish edge; see the Newey-West test in Part 5).
+- Sensitivity: nearby parameters give similar results (not overfit).
+- Works in all regimes (not just bull markets).
+- Sharpe ratio > 0.8 (good risk-adjusted returns).
+- Newey-West t-stat on excess returns > 2 (>3 if you tested many parameter combos).
 
 **Red flags:**
 
-- In-sample 500%, out-of-sample 50% (massive overfitting)
-- Monte Carlo percentile < 50% (random paths beat you)
-- Sensitivity shows wildly different results for small tweaks (unstable)
-- Only works in one market regime (not generalizable)
-- Sharpe < 0.3 (returns don't justify the risk)
-- Newey-West t-stat < 2 even though dollar P&L looks positive (the apparent edge is noise)
+- In-sample 500%, out-of-sample 50% (massive overfitting).
+- Monte Carlo percentile < 50% (random paths beat you).
+- Sensitivity shows wildly different results for small tweaks (unstable).
+- Only works in one market regime (not generalizable).
+- Sharpe < 0.3 (returns don't justify the risk).
+- Newey-West t-stat < 2 even though dollar P&L looks positive (the apparent edge is noise).
 
 **Our strategy:**
 
