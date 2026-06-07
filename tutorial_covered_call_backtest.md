@@ -40,8 +40,6 @@ This is a long document. You almost certainly don't need every word of it. Pick 
 
 ### The Core Idea: Own Shares + Sell Insurance = Extra Income
 
-Let me start with the simplest possible explanation.
-
 Imagine you own a house worth $300,000. You could:
 
 1. **Do nothing** — hope it appreciates, sit and wait
@@ -50,7 +48,7 @@ Imagine you own a house worth $300,000. You could:
 
 A covered call is like option #2 and #3 combined. You own the stock (like owning a house). You sell call options (like selling insurance: "I'll let you buy my stock at $50 anytime in the next 30 days, and you pay me $2 for that right"). If the stock goes up, sometimes your buyer exercises the option and buys your shares (you "lose" them, but at a fixed price). If it stays flat or goes down, the buyer doesn't exercise, and you keep both the stock AND the premium ($2).
 
-> **Key insight:** You're not trying to hit a home run. You're trying to collect small, frequent premiums while the stock does its normal thing.
+> You're collecting small, frequent premiums while the stock does its normal thing.
 
 **Predict first.** You own shares bought at $50. You sell a 30-day call struck at $55 and collect a $2 premium. Over the next month the stock rockets to $65. Did the covered call make money or lose money — and how does your result compare to someone who just held the shares and sold nothing?
 
@@ -152,7 +150,7 @@ For a stock at $50:
 
 ### Step-by-Step Intuition (Not the Math)
 
-The Black-Scholes formula looks scary:
+Written out, the formula is:
 
 ```text
 C = S₀·N(d₁) - K·e^(-rT)·N(d₂)
@@ -1322,7 +1320,7 @@ Monte Carlo, sensitivity analysis, and regime testing (above) are the robustness
 | **Final holdout set** | All-of-the-above leakage | Reserve the last 1–2 years of data and *never touch it* until you're completely done designing and tuning. One shot, no do-overs. **How is this different from walk-forward's test set?** Walk-forward prevents the *code* from peeking at future data, but *you* still see the walk-forward results and make decisions based on them (e.g., "915% looks good, let's keep this approach"). That's information leakage through the human. The holdout prevents that second layer — data you literally never look at during the entire design process. No tuning, no validation, no "let me just check." After you've finalized everything, you run it once on the holdout. That result is your most honest estimate of real-world performance. |
 | **Paper trading** | Everything historical testing can't | Run the strategy live with fake money for 3–6 months. No amount of historical testing substitutes for this. |
 
-**The key insight:** No single check is enough. The more layers that agree your strategy works, the more confident you can be that you've found something real rather than a pattern in noise. Our backtest uses six of these layers (walk-forward, parameter stability, Monte Carlo, regime analysis, sensitivity, and the Newey-West t-stat on excess returns). Adding multi-asset testing and paper trading is the next step before risking real money.
+**The point:** No single check is enough. The more layers that agree your strategy works, the more confident you can be that you've found something real rather than a pattern in noise. Our backtest uses six of these layers (walk-forward, parameter stability, Monte Carlo, regime analysis, sensitivity, and the Newey-West t-stat on excess returns). Adding multi-asset testing and paper trading is the next step before risking real money.
 
 > **Rule of thumb:** If your strategy survives walk-forward + Monte Carlo + parameter stability + at least two different tickers, you have something worth paper trading. If it survives 3–6 months of paper trading, you have something worth deploying with small real capital.
 
@@ -1628,7 +1626,7 @@ After reading this tutorial, you understand:
 4. **Study roll mechanics.** Our model close calls; professionals roll them for extra credit.
 5. **Explore earnings avoidance.** Add a function to detect earnings weeks and skip them.
 
-Good luck. Covered call trading is not exciting, but it's one of the most reliable ways to generate steady income from stock ownership.
+Good luck. Covered call trading is not exciting, but it's a dependable way to generate steady income from stock ownership.
 
 ---
 
