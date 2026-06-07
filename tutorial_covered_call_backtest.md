@@ -1464,7 +1464,6 @@ The integrative one — these pull threads from every Part. Answer from memory b
 | **call_delta** | 0.15–0.20 | 0.25 | 0.30–0.35 |
 | **dte** | 35–45 | 30 | 21 |
 | **close_at_pct** | 0.50 (close early) | 0.75 | 1.00 (hold to expiry) |
-| **Expected assignment freq.** | \~15% | \~25% | \~35% |
 | **Capital in use** | Low (less frequent sales) | Medium | High (constant selling) |
 
 **Recommendation for beginners:** Start with the tested defaults: 0.25Δ call, 21 DTE, 0.75 close_at_pct — the configuration behind every result in this tutorial.
