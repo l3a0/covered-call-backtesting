@@ -52,7 +52,7 @@ It helps to see where that $268,000 comes from. The strategy collected nearly a 
 
 *The income number quoted in pitches is the first bar. The number you actually keep is the third — about 27% of it. The gap is the buybacks and the capped upside.*
 
-## A profit is not an edge
+## Profit isn't proof
 
 A profit and an edge are not the same claim. A profit is "this made money in this particular run of history." An edge is "this has a repeatable advantage that will probably show up again." Every strategy being sold to you reports the first number in large type. Almost none of them report the second, because the second is usually embarrassing.
 
